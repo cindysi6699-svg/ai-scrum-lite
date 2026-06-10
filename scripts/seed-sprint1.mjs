@@ -18,6 +18,17 @@ function newId() {
   return crypto.randomUUID();
 }
 
+function normalizeDatabaseUrl(rawConnectionString) {
+  const url = new URL(rawConnectionString);
+  const sslMode = url.searchParams.get("sslmode");
+
+  if (sslMode === "require" || sslMode === "prefer" || sslMode === "verify-ca") {
+    url.searchParams.set("sslmode", "verify-full");
+  }
+
+  return url.toString();
+}
+
 async function insertOne(client, sql, params) {
   const result = await client.query(sql, params);
   return result.rows[0];
@@ -178,7 +189,9 @@ const agents = [
 ];
 
 async function main() {
-  const client = new Client({ connectionString });
+  const client = new Client({
+    connectionString: normalizeDatabaseUrl(connectionString),
+  });
   await client.connect();
 
   try {
