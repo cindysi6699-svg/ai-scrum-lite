@@ -58,10 +58,31 @@ export async function getProjectForUser(projectId: string, userId: string) {
         },
       },
       sprints: {
+        include: {
+          tasks: {
+            include: {
+              backlogItem: true,
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+        },
         orderBy: {
           updatedAt: "desc",
         },
         take: 5,
+      },
+      backlog: {
+        orderBy: [
+          {
+            type: "asc",
+          },
+          {
+            createdAt: "asc",
+          },
+        ],
+        take: 30,
       },
       _count: {
         select: {

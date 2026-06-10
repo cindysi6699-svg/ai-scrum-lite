@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "smoke": "node scripts/smoke.mjs",
+    "seed:sprint1": "node scripts/seed-sprint1.mjs",
     "verify": "pnpm lint && pnpm exec tsc --noEmit && pnpm build",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
