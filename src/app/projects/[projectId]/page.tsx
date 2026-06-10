@@ -1,34 +1,22 @@
 import {
-  Activity,
-  ArrowLeft,
   Bot,
-  CalendarDays,
-  CheckCircle2,
-  CircleDot,
-  ClipboardList,
-  GitBranch,
+  Check,
+  ChevronDown,
+  Circle,
   GitPullRequest,
-  Kanban,
+  LockKeyhole,
   Plus,
+  RotateCcw,
+  Search,
   Send,
-  ShieldCheck,
-  Sparkles,
-  Users,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   assignTaskAction,
@@ -41,54 +29,88 @@ import {
 import { requireUser } from "@/server/auth/session";
 import { getProjectForUser } from "@/server/queries/projects";
 
-const boardColumns = [
+type BoardColumn = {
+  key: string;
+  title: string;
+  statuses: string[];
+  countTone: string;
+  dot: string;
+  panel: string;
+  card: string;
+};
+
+const boardColumns: BoardColumn[] = [
   {
-    status: "todo",
-    title: "Ready",
-    eyebrow: "Backlog ready",
+    key: "todo",
+    title: "To Do",
+    statuses: ["todo"],
+    countTone: "text-slate-400",
     dot: "bg-slate-400",
-    rail: "border-t-slate-300",
+    panel: "bg-white",
+    card: "border-slate-200",
   },
   {
-    status: "in_progress",
-    title: "In Progress",
-    eyebrow: "Agent executing",
-    dot: "bg-blue-500",
-    rail: "border-t-blue-400",
+    key: "in_progress",
+    title: "Agent 执行中",
+    statuses: ["in_progress", "blocked"],
+    countTone: "text-slate-400",
+    dot: "bg-[#4f7cff]",
+    panel: "bg-white",
+    card: "border-blue-200",
   },
   {
-    status: "blocked",
-    title: "Blocked",
-    eyebrow: "Needs help",
-    dot: "bg-rose-500",
-    rail: "border-t-rose-400",
-  },
-  {
-    status: "review",
-    title: "Review",
-    eyebrow: "Human gate",
+    key: "review",
+    title: "待验收",
+    statuses: ["review"],
+    countTone: "bg-amber-100 text-amber-700",
     dot: "bg-amber-500",
-    rail: "border-t-amber-400",
+    panel: "bg-[#fffdf3] border-amber-300",
+    card: "border-amber-300",
   },
   {
-    status: "accepted",
-    title: "Accepted",
-    eyebrow: "Done",
+    key: "done",
+    title: "Done",
+    statuses: ["done", "accepted"],
+    countTone: "text-slate-400",
     dot: "bg-emerald-500",
-    rail: "border-t-emerald-400",
+    panel: "bg-white",
+    card: "border-slate-200",
   },
 ] as const;
 
 const manualStatuses = [
   { value: "todo", label: "To Do" },
-  { value: "in_progress", label: "In Progress" },
+  { value: "in_progress", label: "Agent 执行中" },
   { value: "blocked", label: "Blocked" },
-  { value: "review", label: "Review" },
+  { value: "review", label: "待验收" },
   { value: "done", label: "Done" },
 ] as const;
 
+const statusCopy: Record<string, string> = {
+  todo: "未指派",
+  in_progress: "运行中",
+  blocked: "重做中",
+  review: "待验收",
+  done: "已完成",
+  accepted: "已合并",
+};
+
 function nativeControlClassName() {
-  return "h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  return "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus-visible:border-[#4f7cff] focus-visible:ring-3 focus-visible:ring-blue-100";
+}
+
+function progressWidth(done: number, total: number) {
+  if (total === 0) {
+    return "0%";
+  }
+
+  return `${Math.min(100, Math.round((done / total) * 100))}%`;
+}
+
+function priorityPoints(priority: string) {
+  const value = Number(priority.replace("P", ""));
+
+  return Number.isFinite(value) ? value : 1;
 }
 
 export default async function ProjectWorkspacePage({
@@ -104,566 +126,607 @@ export default async function ProjectWorkspacePage({
     notFound();
   }
 
-  const currentMember = project.members.find((member) => member.userId === user.id);
   const latestSprint = project.sprints[0];
   const epics = project.backlog.filter((item) => item.type === "epic");
   const stories = project.backlog.filter((item) => item.type === "story");
   const sprintTasks = latestSprint?.tasks ?? [];
   const aiAgents = project.members.filter((member) => member.user.type === "ai");
   const reviewTasks = sprintTasks.filter((task) => task.status === "review");
-  const acceptedTasks = sprintTasks.filter((task) => task.status === "accepted");
-  const openTasks = sprintTasks.length - acceptedTasks.length;
-  const progressPercent =
-    sprintTasks.length === 0
-      ? 0
-      : Math.round((acceptedTasks.length / sprintTasks.length) * 100);
-
-  const stats = [
-    {
-      label: "Sprint tasks",
-      value: sprintTasks.length,
-      icon: Kanban,
-      tone: "bg-blue-50 text-blue-700 ring-blue-100",
-    },
-    {
-      label: "Open work",
-      value: openTasks,
-      icon: CircleDot,
-      tone: "bg-slate-100 text-slate-700 ring-slate-200",
-    },
-    {
-      label: "Review queue",
-      value: reviewTasks.length,
-      icon: ShieldCheck,
-      tone: "bg-amber-50 text-amber-800 ring-amber-100",
-    },
-    {
-      label: "AI agents",
-      value: aiAgents.length,
-      icon: Bot,
-      tone: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-    },
-  ];
+  const doneTasks = sprintTasks.filter(
+    (task) => task.status === "accepted" || task.status === "done",
+  );
+  const blockedTasks = sprintTasks.filter((task) => task.status === "blocked");
+  const activeAgents = aiAgents.filter((agent) =>
+    sprintTasks.some(
+      (task) =>
+        task.assigneeId === agent.userId &&
+        ["in_progress", "blocked", "review"].includes(task.status),
+    ),
+  );
+  const idleAgents = Math.max(0, aiAgents.length - activeAgents.length);
+  const totalPoints = sprintTasks.reduce(
+    (sum, task) => sum + priorityPoints(task.priority),
+    0,
+  );
+  const donePoints = doneTasks.reduce(
+    (sum, task) => sum + priorityPoints(task.priority),
+    0,
+  );
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] text-slate-950">
-      <div className="mx-auto grid w-full max-w-[1580px] gap-5 px-4 py-4 lg:grid-cols-[248px_minmax(0,1fr)] lg:px-5">
-        <aside className="hidden overflow-hidden rounded-lg bg-[#111318] text-white shadow-sm lg:block">
-          <div className="border-b border-white/10 p-5">
+    <main className="min-h-screen bg-[#f6f6f7] text-[#202126]">
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="flex h-20 items-center justify-between px-5">
+          <div className="flex items-center gap-4">
             <Link
-              className="inline-flex items-center gap-2 text-sm text-white/65 transition hover:text-white"
+              className="flex size-10 items-center justify-center rounded-lg bg-[#4f7cff] text-white shadow-sm"
               href="/dashboard"
             >
-              <ArrowLeft className="size-4" />
-              Dashboard
+              <Shield className="size-5" />
             </Link>
-            <div className="mt-7">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/45">
-                AI Scrum Lite
-              </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-normal">
-                {project.name}
-              </h1>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Badge className="border-white/10 bg-white/10 text-white">
-                  {project.status}
-                </Badge>
-                <Badge className="border-white/10 bg-cyan-400/15 text-cyan-100">
-                  {currentMember?.role ?? "member"}
-                </Badge>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold">Helmsman</span>
+              <span className="hidden text-sm text-slate-400 md:inline">
+                / {project.name}
+              </span>
             </div>
           </div>
 
-          <nav className="grid gap-1 p-3 text-sm">
-            {[
-              ["Sprint board", "#board", Kanban],
-              ["Control center", "#control-center", Activity],
-              ["Backlog", "#backlog", ClipboardList],
-              ["Team", "#team", Users],
-            ].map(([label, href, Icon]) => (
-              <a
-                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-white/68 transition hover:bg-white/10 hover:text-white"
-                href={href as string}
-                key={label as string}
-              >
-                <Icon className="size-4" />
-                {label as string}
-              </a>
-            ))}
+          <nav className="hidden items-center gap-7 text-base font-medium text-slate-500 md:flex">
+            <a className="border-b-3 border-[#4f7cff] px-1 py-7 text-[#202126]" href="#board">
+              工作台
+            </a>
+            <a className="px-1 py-7 transition hover:text-[#202126]" href="#metrics">
+              Sprint 仪表盘
+            </a>
+            <a className="flex items-center gap-2 px-1 py-7 transition hover:text-[#202126]" href="#review">
+              验收闸门
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                {reviewTasks.length}
+              </span>
+            </a>
           </nav>
 
-          <div className="mx-4 mt-3 rounded-lg border border-white/10 bg-white/[0.06] p-4">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/40">
-              Sprint health
-            </p>
-            <p className="mt-3 text-3xl font-semibold">{progressPercent}%</p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-cyan-300"
-                style={{ width: `${progressPercent}%` }}
-              />
+          <div className="flex items-center gap-4">
+            <div className="hidden h-10 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-500 lg:flex">
+              <span>Agent 机群</span>
+              <span className="flex items-center gap-1 text-[#4f7cff]">
+                <Circle className="size-2 fill-current" />
+                {activeAgents.length} 执行
+              </span>
+              <span className="flex items-center gap-1">
+                <Circle className="size-2 fill-current text-slate-400" />
+                {idleAgents} 空闲
+              </span>
+              <span className="flex items-center gap-1 text-rose-500">
+                <Circle className="size-2 fill-current" />
+                {blockedTasks.length} 异常
+              </span>
             </div>
-            <p className="mt-3 text-xs leading-5 text-white/55">
-              Accepted tasks divided by all Sprint tasks.
-            </p>
+            <button className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-400 lg:flex">
+              <Search className="size-4" />
+              搜索...
+            </button>
+            <div className="flex size-10 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+              {user.name?.slice(0, 1).toUpperCase() ?? "Y"}
+            </div>
           </div>
-        </aside>
+        </div>
+      </header>
 
-        <section className="min-w-0">
-          <header className="rounded-lg border bg-white px-5 py-5 shadow-sm">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0">
-                <Link
-                  className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-slate-900 lg:hidden"
-                  href="/dashboard"
-                >
-                  <ArrowLeft className="size-4" />
-                  Dashboard
-                </Link>
-                <div className="mt-3 flex flex-wrap items-center gap-2 lg:mt-0">
-                  <Badge variant="outline">AI/OPC Delivery</Badge>
-                  <Badge className="bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100">
-                    Sprint 1
-                  </Badge>
-                </div>
-                <h2 className="mt-4 max-w-4xl text-3xl font-semibold tracking-normal text-slate-950 md:text-4xl">
-                  {project.name}
-                </h2>
-                <p className="mt-3 max-w-5xl text-sm leading-6 text-slate-600">
-                  {project.goal ??
-                    "No project goal recorded yet. Add one before assigning AI agents."}
-                </p>
-              </div>
-
-              <div className="w-full rounded-lg border bg-slate-50 p-4 xl:w-[360px]">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
-                      Current Sprint
-                    </p>
-                    <p className="mt-1 text-base font-semibold">
-                      {latestSprint?.name ?? "No active sprint"}
-                    </p>
-                  </div>
-                  <CalendarDays className="size-5 text-slate-400" />
-                </div>
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  {latestSprint?.goal ?? "Create an active Sprint to begin delivery."}
-                </p>
-              </div>
+      <section className="mx-auto max-w-[1760px] px-5 py-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+              <button className="rounded-md bg-[#4f7cff] px-4 py-2 text-sm font-semibold text-white">
+                看板
+              </button>
+              <a
+                className="rounded-md px-4 py-2 text-sm font-medium text-slate-500 transition hover:text-slate-900"
+                href="#backlog"
+              >
+                Backlog
+              </a>
             </div>
-          </header>
-
-          <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {stats.map((stat) => {
-              const Icon = stat.icon;
-
-              return (
-                <div
-                  className="rounded-lg border bg-white p-4 shadow-sm"
-                  key={stat.label}
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-3xl font-semibold tracking-normal">
-                        {stat.value}
-                      </p>
-                      <p className="mt-1 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-                        {stat.label}
-                      </p>
-                    </div>
-                    <div
-                      className={`flex size-10 items-center justify-center rounded-md ring-1 ${stat.tone}`}
-                    >
-                      <Icon className="size-5" />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-
-          <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <section
-              className="min-w-0 overflow-hidden rounded-lg border bg-white shadow-sm"
-              id="board"
-            >
-              <div className="flex flex-col gap-3 border-b px-5 py-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Kanban className="size-5 text-slate-500" />
-                    <h3 className="text-lg font-semibold tracking-normal">
-                      Sprint Board
-                    </h3>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    One board for the Sprint Backlog. Cards stay readable; actions live on
-                    the right.
-                  </p>
-                </div>
-                <Badge className="w-fit bg-slate-900 text-white">
-                  {acceptedTasks.length}/{sprintTasks.length} accepted
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-normal">
+                  {latestSprint?.name ?? "Sprint 1"} · Walking Skeleton
+                </h1>
+                <Badge className="border border-slate-200 bg-white text-slate-500">
+                  6.10 → 6.17 · 还剩 4 天
                 </Badge>
-              </div>
-
-              <div className="overflow-x-auto p-4">
-                <div className="grid min-w-[1120px] gap-3 xl:min-w-0 xl:grid-cols-5">
-                  {boardColumns.map((column) => {
-                    const columnTasks = sprintTasks.filter(
-                      (task) => task.status === column.status,
-                    );
-
-                    return (
-                      <section
-                        className={`rounded-lg border-t-4 bg-[#f8fafc] ${column.rail}`}
-                        key={column.status}
-                      >
-                        <div className="flex items-start justify-between gap-3 border-b px-3 py-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`size-2.5 rounded-full ${column.dot}`}
-                              />
-                              <h4 className="text-sm font-semibold">{column.title}</h4>
-                            </div>
-                            <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">
-                              {column.eyebrow}
-                            </p>
-                          </div>
-                          <Badge variant="outline">{columnTasks.length}</Badge>
-                        </div>
-
-                        <div className="grid gap-3 p-3">
-                          {columnTasks.length === 0 ? (
-                            <div className="rounded-md border border-dashed bg-white px-3 py-10 text-center text-xs text-slate-400">
-                              No cards
-                            </div>
-                          ) : (
-                            columnTasks.map((task) => (
-                              <article
-                                className="rounded-lg border bg-white p-3 shadow-xs transition hover:-translate-y-0.5 hover:shadow-md"
-                                key={task.id}
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <p className="text-sm font-semibold leading-5 text-slate-950">
-                                    {task.title}
-                                  </p>
-                                  <Badge className="bg-slate-100 text-slate-600">
-                                    P{task.priority}
-                                  </Badge>
-                                </div>
-                                <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
-                                  {task.backlogItem?.title ?? "No linked story"}
-                                </p>
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
-                                    <Bot className="size-3" />
-                                    {task.assignee?.name ?? "Unassigned"}
-                                  </span>
-                                  {task.githubRefs[0]?.pullRequestUrl ? (
-                                    <a
-                                      className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700 ring-1 ring-violet-100"
-                                      href={task.githubRefs[0].pullRequestUrl}
-                                      rel="noreferrer"
-                                      target="_blank"
-                                    >
-                                      <GitPullRequest className="size-3" />
-                                      PR linked
-                                    </a>
-                                  ) : null}
-                                </div>
-
-                                {task.updates[0] ? (
-                                  <div className="mt-3 rounded-md border-l-2 border-cyan-300 bg-cyan-50 px-3 py-2">
-                                    <p className="line-clamp-2 text-xs leading-5 text-cyan-950">
-                                      {task.updates[0].progress}
-                                    </p>
-                                  </div>
-                                ) : null}
-                              </article>
-                            ))
-                          )}
-                        </div>
-                      </section>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-
-            <aside className="grid content-start gap-4" id="control-center">
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="border-b bg-slate-950 text-white">
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="size-4 text-cyan-300" />
-                    Control Center
-                  </CardTitle>
-                  <CardDescription className="text-slate-300">
-                    Pick a task once, then update the delivery signal.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4 pt-4">
-                  <form action={assignTaskAction} className="grid gap-2">
-                    <input name="projectId" type="hidden" value={project.id} />
-                    <p className="text-sm font-semibold">Assign owner</p>
-                    <select className={nativeControlClassName()} name="taskId" required>
-                      <option value="">Select task</option>
-                      {sprintTasks.map((task) => (
-                        <option key={task.id} value={task.id}>
-                          {task.title}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className={nativeControlClassName()}
-                      name="assigneeId"
-                      required
-                    >
-                      <option value="">Select AI agent</option>
-                      {aiAgents.map((agent) => (
-                        <option key={agent.userId} value={agent.userId}>
-                          {agent.displayName ?? agent.user.name ?? "AI agent"}
-                        </option>
-                      ))}
-                    </select>
-                    <Button disabled={aiAgents.length === 0} type="submit">
-                      <Bot className="size-4" />
-                      Assign
-                    </Button>
-                  </form>
-
-                  <Separator />
-
-                  <form action={updateTaskStatusAction} className="grid gap-2">
-                    <input name="projectId" type="hidden" value={project.id} />
-                    <p className="text-sm font-semibold">Post task update</p>
-                    <select className={nativeControlClassName()} name="taskId" required>
-                      <option value="">Select task</option>
-                      {sprintTasks.map((task) => (
-                        <option key={task.id} value={task.id}>
-                          {task.title}
-                        </option>
-                      ))}
-                    </select>
-                    <select className={nativeControlClassName()} name="status">
-                      {manualStatuses.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
-                    <Input name="progress" placeholder="Progress note" />
-                    <Button type="submit" variant="outline">
-                      <Activity className="size-4" />
-                      Update status
-                    </Button>
-                  </form>
-
-                  <Separator />
-
-                  <form action={submitPullRequestAction} className="grid gap-2">
-                    <input name="projectId" type="hidden" value={project.id} />
-                    <p className="text-sm font-semibold">Link GitHub PR</p>
-                    <select className={nativeControlClassName()} name="taskId" required>
-                      <option value="">Select task</option>
-                      {sprintTasks.map((task) => (
-                        <option key={task.id} value={task.id}>
-                          {task.title}
-                        </option>
-                      ))}
-                    </select>
-                    <Input
-                      name="pullRequestUrl"
-                      placeholder="https://github.com/.../pull/1"
-                      required
-                      type="url"
-                    />
-                    <Input name="branch" placeholder="story/us-1" />
-                    <Button type="submit">
-                      <GitBranch className="size-4" />
-                      Link PR
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card className="border-amber-200 bg-amber-50 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-amber-950">
-                    <ShieldCheck className="size-4" />
-                    Human review gate
-                  </CardTitle>
-                  <CardDescription className="text-amber-800">
-                    Approve or send a reviewed task back to rework.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <form action={reviewTaskAction} className="grid gap-2">
-                    <input name="projectId" type="hidden" value={project.id} />
-                    <input name="decision" type="hidden" value="approve" />
-                    <select className={nativeControlClassName()} name="taskId" required>
-                      <option value="">Select review task</option>
-                      {reviewTasks.map((task) => (
-                        <option key={task.id} value={task.id}>
-                          {task.title}
-                        </option>
-                      ))}
-                    </select>
-                    <Button disabled={reviewTasks.length === 0} type="submit">
-                      <CheckCircle2 className="size-4" />
-                      Approve
-                    </Button>
-                  </form>
-
-                  <form action={reviewTaskAction} className="grid gap-2">
-                    <input name="projectId" type="hidden" value={project.id} />
-                    <input name="decision" type="hidden" value="reject" />
-                    <select className={nativeControlClassName()} name="taskId" required>
-                      <option value="">Select review task</option>
-                      {reviewTasks.map((task) => (
-                        <option key={task.id} value={task.id}>
-                          {task.title}
-                        </option>
-                      ))}
-                    </select>
-                    <Input name="feedback" placeholder="Feedback for rework" />
-                    <Button
-                      disabled={reviewTasks.length === 0}
-                      type="submit"
-                      variant="outline"
-                    >
-                      Reject
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card id="intake">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Plus className="size-4 text-slate-500" />
-                    Create Sprint story
-                  </CardTitle>
-                  <CardDescription>
-                    Add a story directly to the active Sprint.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form action={createStoryTaskAction} className="grid gap-3">
-                    <input name="projectId" type="hidden" value={project.id} />
-                    <Input name="title" placeholder="US-X Short outcome" required />
-                    <Textarea
-                      name="userStory"
-                      placeholder="As a..., I want..., so that..."
-                      required
-                    />
-                    <Textarea
-                      name="acceptanceCriteria"
-                      placeholder="Given / When / Then"
-                      required
-                    />
-                    <Button type="submit" variant="outline">
-                      <Send className="size-4" />
-                      Add to Sprint
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </aside>
-          </section>
-
-          <section className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]" id="backlog">
-            <section className="rounded-lg border bg-white shadow-sm">
-              <div className="border-b px-5 py-4">
-                <h3 className="flex items-center gap-2 text-lg font-semibold">
-                  <ClipboardList className="size-5 text-slate-500" />
-                  Product Backlog
-                </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  {epics.length} epics / {stories.length} Sprint stories
-                </p>
-              </div>
-              <div className="grid gap-2 p-4">
-                {epics.length === 0 ? (
-                  <p className="rounded-md border border-dashed px-4 py-8 text-sm text-slate-500">
-                    No epics imported yet.
-                  </p>
-                ) : (
-                  epics.map((epic) => (
-                    <article className="rounded-md border bg-slate-50 p-3" key={epic.id}>
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-semibold">{epic.title}</p>
-                        <Badge variant="secondary">P{epic.priority}</Badge>
-                      </div>
-                      {epic.description ? (
-                        <p className="mt-2 text-xs leading-5 text-slate-500">
-                          {epic.description}
-                        </p>
-                      ) : null}
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-lg border bg-white shadow-sm" id="team">
-              <div className="border-b px-5 py-4">
-                <h3 className="flex items-center gap-2 text-lg font-semibold">
-                  <Users className="size-5 text-slate-500" />
-                  Team and agents
-                </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Human owner and AI agents available to the Sprint.
-                </p>
-              </div>
-              <div className="grid gap-2 p-4">
-                {project.members.map((member) => (
+                <div className="h-2 w-56 overflow-hidden rounded-full bg-slate-200">
                   <div
-                    className="flex items-center justify-between rounded-md border bg-slate-50 px-3 py-3"
-                    key={member.id}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold">
-                        {member.displayName ??
-                          member.user.name ??
-                          member.user.email ??
-                          "Unnamed member"}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {member.user.type === "ai"
-                          ? "AI agent"
-                          : (member.user.email ?? "Human member")}
-                      </p>
-                    </div>
-                    <Badge variant="outline">{member.role}</Badge>
-                  </div>
-                ))}
+                    className="h-full rounded-full bg-[#4f7cff]"
+                    style={{ width: progressWidth(donePoints, totalPoints) }}
+                  />
+                </div>
+                <span className="text-sm font-medium text-slate-500">
+                  {donePoints}/{totalPoints} pts
+                </span>
               </div>
-            </section>
-          </section>
+              <p className="mt-2 max-w-4xl text-sm text-slate-500">
+                {latestSprint?.goal ??
+                  project.goal ??
+                  "Manage Sprint work, AI agent execution, PR review, and human approval gates."}
+              </p>
+            </div>
+          </div>
 
-          <section className="mt-4 rounded-lg border bg-white p-4 shadow-sm">
-            <form
-              action={createAgentAction}
-              className="grid gap-3 md:grid-cols-[1fr_180px_auto]"
+          <form
+            action={createStoryTaskAction}
+            className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm xl:grid-cols-[220px_260px_220px_auto]"
+          >
+            <input name="projectId" type="hidden" value={project.id} />
+            <Input name="title" placeholder="新建 Story 标题" required />
+            <Input
+              name="userStory"
+              placeholder="As a..., I want..."
+              required
+            />
+            <Input
+              name="acceptanceCriteria"
+              placeholder="验收标准"
+              required
+            />
+            <Button className="bg-[#4f7cff] hover:bg-[#416df1]" type="submit">
+              <Plus className="size-4" />
+              新建 Story
+            </Button>
+          </form>
+        </div>
+
+        <section
+          className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          id="metrics"
+        >
+          {[
+            ["完成 / 总点数", `${donePoints}`, `/${totalPoints}`, "按节奏可如期完成", "text-emerald-600"],
+            ["Agent 提交 PR", `${reviewTasks.length + doneTasks.length}`, "", `今日 +${reviewTasks.length}`, "text-slate-400"],
+            ["验收通过率", `${sprintTasks.length ? Math.round((doneTasks.length / sprintTasks.length) * 100) : 0}%`, "", `打回 ${blockedTasks.length} · 注意返工成本`, "text-rose-500"],
+            ["平均验收等待", "38", "min", "闸门趋于瓶颈", "text-orange-500"],
+          ].map(([label, value, suffix, helper, tone]) => (
+            <div
+              className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+              key={label}
             >
+              <p className="text-sm font-medium text-slate-500">{label}</p>
+              <div className="mt-3 flex items-end gap-1">
+                <p className="text-4xl font-semibold tracking-normal">{value}</p>
+                <p className="pb-1 text-xl font-semibold text-slate-400">{suffix}</p>
+              </div>
+              <p className={`mt-3 text-sm font-medium ${tone}`}>{helper}</p>
+            </div>
+          ))}
+        </section>
+
+        <section className="mt-6 grid gap-4 xl:grid-cols-4" id="board">
+          {boardColumns.map((column) => {
+            const columnTasks = sprintTasks.filter((task) =>
+              column.statuses.includes(task.status),
+            );
+
+            return (
+              <section
+                className={`min-h-[640px] rounded-xl border border-slate-200 shadow-sm ${column.panel}`}
+                key={column.key}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className={`size-2.5 rounded-full ${column.dot}`} />
+                    <h2 className="text-lg font-semibold tracking-normal">
+                      {column.title}
+                    </h2>
+                  </div>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-sm font-semibold ${column.countTone}`}
+                  >
+                    {columnTasks.length}
+                  </span>
+                </div>
+
+                <div className="grid gap-3 p-3">
+                  {columnTasks.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-slate-200 bg-white/70 px-3 py-12 text-center text-sm text-slate-400">
+                      暂无卡片
+                    </div>
+                  ) : (
+                    columnTasks.map((task, index) => {
+                      const isReview = task.status === "review";
+                      const isBlocked = task.status === "blocked";
+                      const isDone =
+                        task.status === "accepted" || task.status === "done";
+
+                      return (
+                        <article
+                          className={`rounded-lg border bg-white p-4 shadow-sm ${column.card} ${
+                            isBlocked ? "border-rose-300" : ""
+                          } ${isReview ? "bg-[#fffdf8]" : ""}`}
+                          key={task.id}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-xs font-semibold text-slate-400">
+                              US-{index + 1}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {task.githubRefs[0]?.pullRequestUrl ? (
+                                <a
+                                  className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700"
+                                  href={task.githubRefs[0].pullRequestUrl}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  PR #{task.githubRefs[0].pullRequestUrl
+                                    .split("/")
+                                    .pop()}
+                                </a>
+                              ) : null}
+                              <span
+                                className={`text-xs font-medium ${
+                                  isReview
+                                    ? "text-amber-600"
+                                    : isBlocked
+                                      ? "text-rose-500"
+                                      : isDone
+                                        ? "text-emerald-600"
+                                        : "text-[#4f7cff]"
+                                }`}
+                              >
+                                {statusCopy[task.status]}
+                              </span>
+                            </div>
+                          </div>
+
+                          <h3 className="mt-3 text-base font-semibold leading-6">
+                            {task.title}
+                          </h3>
+                          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+                            {task.backlogItem?.title ?? "未关联 Story"}
+                          </p>
+
+                          {task.updates[0] ? (
+                            <p
+                              className={`mt-3 rounded-md px-3 py-2 text-sm leading-6 ${
+                                isBlocked
+                                  ? "bg-rose-50 text-rose-600"
+                                  : "bg-slate-50 text-slate-500"
+                              }`}
+                            >
+                              {task.updates[0].progress}
+                            </p>
+                          ) : null}
+
+                          <div className="mt-4 border-t border-slate-200 pt-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="inline-flex items-center gap-2 text-sm text-slate-500">
+                                <span className="flex size-7 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
+                                  <LockKeyhole className="size-4" />
+                                </span>
+                                {task.assignee?.name ?? "未指派"}
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                {task.priority} pts
+                              </span>
+                            </div>
+                          </div>
+
+                          {task.status === "todo" ? (
+                            <form
+                              action={assignTaskAction}
+                              className="mt-3 grid grid-cols-[1fr_auto] gap-2"
+                            >
+                              <input
+                                name="projectId"
+                                type="hidden"
+                                value={project.id}
+                              />
+                              <input name="taskId" type="hidden" value={task.id} />
+                              <select
+                                className={nativeControlClassName()}
+                                defaultValue={task.assigneeId ?? ""}
+                                name="assigneeId"
+                                required
+                              >
+                                <option value="">指派给</option>
+                                {aiAgents.map((agent) => (
+                                  <option key={agent.userId} value={agent.userId}>
+                                    {agent.displayName ??
+                                      agent.user.name ??
+                                      "AI agent"}
+                                  </option>
+                                ))}
+                              </select>
+                              <Button
+                                className="bg-[#4f7cff] hover:bg-[#416df1]"
+                                disabled={aiAgents.length === 0}
+                                size="sm"
+                                type="submit"
+                              >
+                                指派
+                              </Button>
+                            </form>
+                          ) : null}
+
+                          {task.status === "in_progress" ||
+                          task.status === "blocked" ? (
+                            <div className="mt-3 grid gap-2">
+                              <form
+                                action={updateTaskStatusAction}
+                                className="grid grid-cols-[1fr_auto] gap-2"
+                              >
+                                <input
+                                  name="projectId"
+                                  type="hidden"
+                                  value={project.id}
+                                />
+                                <input name="taskId" type="hidden" value={task.id} />
+                                <input
+                                  name="status"
+                                  type="hidden"
+                                  value="review"
+                                />
+                                <Input
+                                  name="progress"
+                                  placeholder="测试 22/22 通过"
+                                  required
+                                />
+                                <Button size="sm" type="submit" variant="outline">
+                                  提验
+                                </Button>
+                              </form>
+                              <form
+                                action={submitPullRequestAction}
+                                className="grid grid-cols-[1fr_auto] gap-2"
+                              >
+                                <input
+                                  name="projectId"
+                                  type="hidden"
+                                  value={project.id}
+                                />
+                                <input name="taskId" type="hidden" value={task.id} />
+                                <Input
+                                  name="pullRequestUrl"
+                                  placeholder="PR URL"
+                                  required
+                                  type="url"
+                                />
+                                <Button size="sm" type="submit">
+                                  <GitPullRequest className="size-4" />
+                                </Button>
+                              </form>
+                            </div>
+                          ) : null}
+
+                          {isReview ? (
+                            <div className="mt-4 grid gap-2">
+                              <form
+                                action={reviewTaskAction}
+                                className="grid grid-cols-2 gap-2"
+                              >
+                                <input
+                                  name="projectId"
+                                  type="hidden"
+                                  value={project.id}
+                                />
+                                <input name="taskId" type="hidden" value={task.id} />
+                                <input
+                                  name="decision"
+                                  type="hidden"
+                                  value="approve"
+                                />
+                                <Button className="bg-emerald-600 hover:bg-emerald-700" type="submit">
+                                  <Check className="size-4" />
+                                  通过验收
+                                </Button>
+                              </form>
+                              <form
+                                action={reviewTaskAction}
+                                className="grid grid-cols-[1fr_auto] gap-2"
+                              >
+                                <input
+                                  name="projectId"
+                                  type="hidden"
+                                  value={project.id}
+                                />
+                                <input name="taskId" type="hidden" value={task.id} />
+                                <input
+                                  name="decision"
+                                  type="hidden"
+                                  value="reject"
+                                />
+                                <Input
+                                  name="feedback"
+                                  placeholder="打回原因"
+                                  required
+                                />
+                                <Button
+                                  className="border-rose-200 text-rose-600 hover:bg-rose-50"
+                                  type="submit"
+                                  variant="outline"
+                                >
+                                  <RotateCcw className="size-4" />
+                                  打回
+                                </Button>
+                              </form>
+                            </div>
+                          ) : null}
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </section>
+
+        <section
+          className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]"
+          id="review"
+        >
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <LockKeyhole className="size-5 text-amber-500" />
+                <h2 className="text-lg font-semibold">需要你验收</h2>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-sm font-semibold text-amber-700">
+                  {reviewTasks.length}
+                </span>
+              </div>
+              <a className="text-sm font-semibold text-[#4f7cff]" href="#board">
+                全部查看
+              </a>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {reviewTasks.length === 0 ? (
+                <div className="px-5 py-10 text-sm text-slate-400">
+                  当前没有等待验收的任务。
+                </div>
+              ) : (
+                reviewTasks.slice(0, 3).map((task, index) => (
+                  <div
+                    className="grid gap-3 px-5 py-4 md:grid-cols-[90px_110px_1fr_120px_120px]"
+                    key={task.id}
+                  >
+                    <span className="text-sm font-medium text-slate-400">
+                      PR #{task.githubRefs[0]?.pullRequestUrl?.split("/").pop() ?? index + 1}
+                    </span>
+                    <span className="rounded-md bg-slate-50 px-2 py-1 text-sm text-slate-500">
+                      Helmsman
+                    </span>
+                    <span className="font-medium">{task.title}</span>
+                    <span className="text-sm font-semibold text-emerald-600">
+                      ✓ ready
+                    </span>
+                    <span className="text-sm text-slate-500">
+                      {task.assignee?.name ?? "agent"}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold">快捷操作</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              用于不在卡片上直接处理的批量状态更新。
+            </p>
+            <form action={updateTaskStatusAction} className="mt-4 grid gap-3">
               <input name="projectId" type="hidden" value={project.id} />
-              <Input name="name" placeholder="Register AI agent, e.g. QA Agent 02" />
-              <select className={nativeControlClassName()} name="role" required>
-                <option value="dev">Dev Agent</option>
-                <option value="qa">QA Agent</option>
-                <option value="design">Design Agent</option>
+              <select className={nativeControlClassName()} name="taskId" required>
+                <option value="">选择任务</option>
+                {sprintTasks.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.title}
+                  </option>
+                ))}
               </select>
+              <select className={nativeControlClassName()} name="status">
+                {manualStatuses.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+              <Textarea name="progress" placeholder="补充进度、阻塞或验收信息" />
               <Button type="submit" variant="outline">
-                <Bot className="size-4" />
-                Register agent
+                <Send className="size-4" />
+                更新任务
               </Button>
             </form>
-          </section>
+          </div>
         </section>
-      </div>
+
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm" id="backlog">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold">Product Backlog</h2>
+              <span className="text-sm text-slate-500">
+                {epics.length} Epics · 优先级依据已验证痛点排序
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-rose-50 text-rose-600">Must 必须</Badge>
+              <Badge className="bg-amber-50 text-amber-700">Should 应该</Badge>
+              <Badge className="bg-slate-100 text-slate-500">Could 可选</Badge>
+            </div>
+          </div>
+
+          <div className="grid gap-3 p-4">
+            {epics.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-slate-200 px-4 py-12 text-center text-sm text-slate-400">
+                No epics imported yet.
+              </div>
+            ) : (
+              epics.map((epic, index) => {
+                const linkedStories = stories.filter(
+                  (story) => story.parentId === epic.id,
+                );
+
+                return (
+                  <article className="rounded-lg border border-slate-200 bg-white" key={epic.id}>
+                    <div className="flex items-center justify-between gap-4 px-5 py-4">
+                      <div className="flex items-center gap-4">
+                        <ChevronDown className="size-4 text-slate-400" />
+                        <span className="text-sm font-semibold text-slate-400">
+                          E{index + 1}
+                        </span>
+                        <h3 className="font-semibold">{epic.title}</h3>
+                        <Badge className="bg-rose-50 text-rose-600">Must</Badge>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm text-slate-400">
+                        <span>S{index + 1}</span>
+                        <div className="h-2 w-28 overflow-hidden rounded-full bg-slate-200">
+                          <div className="h-full w-1/2 rounded-full bg-emerald-500" />
+                        </div>
+                        <span>{linkedStories.length}/4 done</span>
+                      </div>
+                    </div>
+                    {linkedStories.slice(0, 2).map((story, storyIndex) => (
+                      <div
+                        className="grid grid-cols-[80px_1fr_120px_60px] items-center border-t border-slate-100 px-5 py-4 text-sm"
+                        key={story.id}
+                      >
+                        <span className="text-slate-400">US-{storyIndex + 1}</span>
+                        <span className="font-medium text-slate-600">
+                          {story.title}
+                        </span>
+                        <span className="text-[#4f7cff]">
+                          {storyIndex === 0 ? "执行中" : "To Do"}
+                        </span>
+                        <span className="rounded-md bg-slate-100 px-2 py-1 text-center text-slate-500">
+                          {story.priority}
+                        </span>
+                      </div>
+                    ))}
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <form
+            action={createAgentAction}
+            className="grid gap-3 md:grid-cols-[1fr_180px_auto]"
+          >
+            <Input name="name" placeholder="注册 Agent，例如 QA Agent 02" />
+            <input name="projectId" type="hidden" value={project.id} />
+            <select className={nativeControlClassName()} name="role" required>
+              <option value="dev">Dev Agent</option>
+              <option value="qa">QA Agent</option>
+              <option value="design">Design Agent</option>
+            </select>
+            <Button type="submit" variant="outline">
+              <Bot className="size-4" />
+              Register agent
+            </Button>
+          </form>
+        </section>
+      </section>
     </main>
   );
 }
