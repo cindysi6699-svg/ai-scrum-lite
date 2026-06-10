@@ -166,6 +166,17 @@ const roadmap = [
   "R4 – 小团队 GTM(S4+): 多人协作、权限、定价",
 ];
 
+const agents = [
+  {
+    name: "Dev Agent 01",
+    role: "dev",
+  },
+  {
+    name: "QA Agent 01",
+    role: "qa",
+  },
+];
+
 async function main() {
   const client = new Client({ connectionString });
   await client.connect();
@@ -223,6 +234,38 @@ async function main() {
       ],
     );
 
+    const agentUsers = [];
+
+    for (const agent of agents) {
+      const agentUser = await insertOne(
+        client,
+        `INSERT INTO "User"
+          ("id", "name", "type", "provider", "providerAccountId", "createdAt", "updatedAt")
+         VALUES
+          ($1, $2, $3::"UserType", $4, $5, $6, $7)
+         RETURNING *`,
+        [
+          newId(),
+          agent.name,
+          "ai",
+          "ai-scrum-lite",
+          `ai-agent:${project.id}:${agent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          now,
+          now,
+        ],
+      );
+
+      await client.query(
+        `INSERT INTO "ProjectMember"
+          ("id", "projectId", "userId", "role", "displayName", "createdAt", "updatedAt")
+         VALUES
+          ($1, $2, $3, $4::"ProjectRole", $5, $6, $7)`,
+        [newId(), project.id, agentUser.id, agent.role, agent.name, now, now],
+      );
+
+      agentUsers.push(agentUser);
+    }
+
     const sprint = await insertOne(
       client,
       `INSERT INTO "Sprint"
@@ -244,6 +287,7 @@ async function main() {
     );
 
     const epicByCode = new Map();
+    const seededTasks = [];
 
     for (const epic of epics) {
       const item = await insertOne(
@@ -297,11 +341,13 @@ async function main() {
       );
 
       for (const taskTitle of story.tasks) {
-        await client.query(
+        const task = await insertOne(
+          client,
           `INSERT INTO "Task"
             ("id", "projectId", "sprintId", "backlogItemId", "title", "description", "type", "priority", "status", "userStory", "acceptanceCriteria", "createdById", "createdAt", "updatedAt")
            VALUES
-            ($1, $2, $3, $4, $5, $6, $7::"WorkItemType", $8::"Priority", $9::"TaskStatus", $10, $11, $12, $13, $14)`,
+            ($1, $2, $3, $4, $5, $6, $7::"WorkItemType", $8::"Priority", $9::"TaskStatus", $10, $11, $12, $13, $14)
+           RETURNING *`,
           [
             newId(),
             project.id,
@@ -319,7 +365,111 @@ async function main() {
             now,
           ],
         );
+
+        seededTasks.push(task);
       }
+    }
+
+    const devAgent = agentUsers[0];
+    const qaAgent = agentUsers[1];
+    const inProgressTask = seededTasks[0];
+    const reviewTask = seededTasks[1];
+    const blockedTask = seededTasks[2];
+
+    if (devAgent && inProgressTask) {
+      await client.query(
+        `UPDATE "Task"
+         SET "assigneeId" = $1, "status" = $2::"TaskStatus", "startedAt" = $3, "updatedAt" = $4
+         WHERE "id" = $5`,
+        [devAgent.id, "in_progress", now, now, inProgressTask.id],
+      );
+      await client.query(
+        `INSERT INTO "TaskUpdate"
+          ("id", "taskId", "actorId", "previousStatus", "newStatus", "progress", "createdAt")
+         VALUES
+          ($1, $2, $3, $4::"TaskStatus", $5::"TaskStatus", $6, $7)`,
+        [
+          newId(),
+          inProgressTask.id,
+          owner.id,
+          "todo",
+          "in_progress",
+          "Seeded dogfood state: assigned to Dev Agent 01 and execution started.",
+          now,
+        ],
+      );
+    }
+
+    if (devAgent && reviewTask) {
+      await client.query(
+        `UPDATE "Task"
+         SET "assigneeId" = $1, "status" = $2::"TaskStatus", "startedAt" = $3, "completedAt" = $4, "updatedAt" = $5
+         WHERE "id" = $6`,
+        [devAgent.id, "review", now, now, now, reviewTask.id],
+      );
+      await client.query(
+        `INSERT INTO "GithubRef"
+          ("id", "projectId", "taskId", "branch", "pullRequestUrl", "checksStatus", "note", "createdById", "createdAt", "updatedAt")
+         VALUES
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          newId(),
+          project.id,
+          reviewTask.id,
+          "story/us-1-status-log",
+          "https://github.com/cindysi6699-svg/ai-scrum-lite/pull/1",
+          "passed",
+          "Seeded PR trace for human acceptance gate testing.",
+          owner.id,
+          now,
+          now,
+        ],
+      );
+      await client.query(
+        `INSERT INTO "TaskUpdate"
+          ("id", "taskId", "actorId", "previousStatus", "newStatus", "progress", "artifacts", "needsHumanDecision", "createdAt")
+         VALUES
+          ($1, $2, $3, $4::"TaskStatus", $5::"TaskStatus", $6, $7::jsonb, $8, $9)`,
+        [
+          newId(),
+          reviewTask.id,
+          devAgent.id,
+          "in_progress",
+          "review",
+          "Seeded dogfood state: PR linked and waiting for human review.",
+          JSON.stringify({
+            pullRequestUrl: "https://github.com/cindysi6699-svg/ai-scrum-lite/pull/1",
+          }),
+          true,
+          now,
+        ],
+      );
+    }
+
+    if (qaAgent && blockedTask) {
+      await client.query(
+        `UPDATE "Task"
+         SET "assigneeId" = $1, "status" = $2::"TaskStatus", "startedAt" = $3, "updatedAt" = $4
+         WHERE "id" = $5`,
+        [qaAgent.id, "blocked", now, now, blockedTask.id],
+      );
+      await client.query(
+        `INSERT INTO "TaskUpdate"
+          ("id", "taskId", "actorId", "previousStatus", "newStatus", "progress", "blockers", "nextStep", "createdAt")
+         VALUES
+          ($1, $2, $3, $4::"TaskStatus", $5::"TaskStatus", $6, $7::jsonb, $8, $9)`,
+        [
+          newId(),
+          blockedTask.id,
+          qaAgent.id,
+          "todo",
+          "blocked",
+          "Seeded dogfood state: needs product clarification before testing drag behavior.",
+          JSON.stringify(["Clarify allowed status transition matrix."]),
+          "Owner confirms state rules, then QA resumes.",
+          now,
+        ],
+      );
     }
 
     await client.query(
@@ -350,6 +500,7 @@ async function main() {
           project: project.name,
           projectId: project.id,
           sprint: sprint.name,
+          agents: agents.length,
           epics: epics.length,
           stories: stories.length,
           tasks: stories.reduce((sum, story) => sum + story.tasks.length, 0),

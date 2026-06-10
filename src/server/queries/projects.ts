@@ -61,7 +61,23 @@ export async function getProjectForUser(projectId: string, userId: string) {
         include: {
           tasks: {
             include: {
+              assignee: true,
               backlogItem: true,
+              githubRefs: {
+                orderBy: {
+                  createdAt: "desc",
+                },
+                take: 1,
+              },
+              updates: {
+                include: {
+                  actor: true,
+                },
+                orderBy: {
+                  createdAt: "desc",
+                },
+                take: 2,
+              },
             },
             orderBy: {
               createdAt: "asc",
@@ -82,7 +98,7 @@ export async function getProjectForUser(projectId: string, userId: string) {
             createdAt: "asc",
           },
         ],
-        take: 30,
+        take: 100,
       },
       _count: {
         select: {

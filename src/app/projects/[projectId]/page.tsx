@@ -1,19 +1,32 @@
 import {
+  Activity,
   ArrowLeft,
   BookOpen,
+  Bot,
   Bug,
   CalendarDays,
   CheckCircle2,
   ClipboardList,
+  GitBranch,
   GitPullRequest,
   Kanban,
+  Send,
   Settings,
+  ShieldCheck,
   Users,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { requireUser } from "@/server/auth/session";
+import {
+  assignTaskAction,
+  createAgentAction,
+  createStoryTaskAction,
+  reviewTaskAction,
+  submitPullRequestAction,
+  updateTaskStatusAction,
+} from "@/server/actions/tasks";
 import { getProjectForUser } from "@/server/queries/projects";
 
 function formatDate(date: Date) {
@@ -45,6 +58,22 @@ const workspaceLinks = [
   },
 ];
 
+const boardColumns = [
+  { status: "todo", title: "To Do" },
+  { status: "in_progress", title: "Agent Executing" },
+  { status: "blocked", title: "Blocked" },
+  { status: "review", title: "Human Review" },
+  { status: "accepted", title: "Accepted" },
+] as const;
+
+const manualStatuses = [
+  { value: "todo", label: "To Do" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "blocked", label: "Blocked" },
+  { value: "review", label: "Review" },
+  { value: "done", label: "Done" },
+] as const;
+
 export default async function ProjectWorkspacePage({
   params,
 }: {
@@ -63,6 +92,8 @@ export default async function ProjectWorkspacePage({
   const epics = project.backlog.filter((item) => item.type === "epic");
   const stories = project.backlog.filter((item) => item.type === "story");
   const sprintTasks = latestSprint?.tasks ?? [];
+  const aiAgents = project.members.filter((member) => member.user.type === "ai");
+  const reviewTasks = sprintTasks.filter((task) => task.status === "review");
 
   const stats = [
     {
@@ -225,6 +256,113 @@ export default async function ProjectWorkspacePage({
           })}
         </section>
 
+        <section
+          className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"
+          id="settings"
+        >
+          <form
+            action={createStoryTaskAction}
+            className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+          >
+            <input name="projectId" type="hidden" value={project.id} />
+            <div className="flex items-center gap-2">
+              <BookOpen className="size-5 text-slate-500" />
+              <div>
+                <p className="text-sm font-medium text-slate-500">Backlog intake</p>
+                <h2 className="text-lg font-semibold tracking-normal">
+                  Create Sprint story
+                </h2>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3">
+              <label className="grid gap-1 text-sm font-medium text-slate-700">
+                Story title
+                <input
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal outline-none transition focus:border-slate-950"
+                  name="title"
+                  placeholder="US-X Short outcome"
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium text-slate-700">
+                User story
+                <textarea
+                  className="min-h-20 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-slate-950"
+                  name="userStory"
+                  placeholder="As a..., I want..., so that..."
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium text-slate-700">
+                Acceptance criteria
+                <textarea
+                  className="min-h-20 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-slate-950"
+                  name="acceptanceCriteria"
+                  placeholder="Given / When / Then"
+                  required
+                />
+              </label>
+            </div>
+            <button
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+              type="submit"
+            >
+              <Send className="size-4" />
+              Add to Sprint
+            </button>
+          </form>
+
+          <form
+            action={createAgentAction}
+            className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+          >
+            <input name="projectId" type="hidden" value={project.id} />
+            <div className="flex items-center gap-2">
+              <Bot className="size-5 text-slate-500" />
+              <div>
+                <p className="text-sm font-medium text-slate-500">Agent registry</p>
+                <h2 className="text-lg font-semibold tracking-normal">
+                  Register AI agent
+                </h2>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3">
+              <label className="grid gap-1 text-sm font-medium text-slate-700">
+                Agent name
+                <input
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal outline-none transition focus:border-slate-950"
+                  name="name"
+                  placeholder="Dev Agent 01"
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium text-slate-700">
+                Role
+                <select
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal outline-none transition focus:border-slate-950"
+                  name="role"
+                  required
+                >
+                  <option value="dev">Dev Agent</option>
+                  <option value="qa">QA Agent</option>
+                  <option value="design">Design Agent</option>
+                </select>
+              </label>
+            </div>
+            <button
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+              type="submit"
+            >
+              <Bot className="size-4" />
+              Register agent
+            </button>
+            <div className="mt-5 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+              Registered agents are treated as online for Sprint 1. The next version can
+              add heartbeat and last-seen checks.
+            </div>
+          </form>
+        </section>
+
         <section className="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between">
@@ -319,6 +457,227 @@ export default async function ProjectWorkspacePage({
                 ))
               )}
             </div>
+          </div>
+        </section>
+
+        <section
+          className="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+          id="sprint-board"
+        >
+          <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Kanban className="size-5 text-slate-500" />
+                <p className="text-sm font-medium text-slate-500">
+                  {latestSprint?.name ?? "No active sprint"}
+                </p>
+              </div>
+              <h2 className="mt-1 text-xl font-semibold tracking-normal">
+                Sprint board
+              </h2>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              <span className="font-semibold text-slate-950">{reviewTasks.length}</span>{" "}
+              waiting for human acceptance
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-5">
+            {boardColumns.map((column) => {
+              const columnTasks = sprintTasks.filter(
+                (task) => task.status === column.status,
+              );
+
+              return (
+                <div
+                  className="min-h-40 rounded-lg border border-slate-200 bg-slate-50 p-3"
+                  key={column.status}
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-950">
+                      {column.title}
+                    </h3>
+                    <span className="rounded-md bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                      {columnTasks.length}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 grid gap-3">
+                    {columnTasks.length === 0 ? (
+                      <p className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-5 text-center text-xs text-slate-500">
+                        Empty
+                      </p>
+                    ) : (
+                      columnTasks.map((task) => (
+                        <article
+                          className="rounded-md border border-slate-200 bg-white p-3 shadow-sm"
+                          key={task.id}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold leading-5 text-slate-950">
+                              {task.title}
+                            </p>
+                            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                              {task.priority}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-slate-500">
+                            {task.backlogItem?.title ?? "No linked story"}
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">
+                              <Bot className="size-3" />
+                              {task.assignee?.name ?? "Unassigned"}
+                            </span>
+                            {task.githubRefs[0]?.pullRequestUrl ? (
+                              <a
+                                className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 font-medium text-blue-700 underline-offset-4 hover:underline"
+                                href={task.githubRefs[0].pullRequestUrl}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                <GitPullRequest className="size-3" />
+                                PR
+                              </a>
+                            ) : null}
+                          </div>
+
+                          {task.updates[0] ? (
+                            <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                              {task.updates[0].progress}
+                            </p>
+                          ) : null}
+
+                          <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3">
+                            <form action={assignTaskAction} className="grid gap-2">
+                              <input name="projectId" type="hidden" value={project.id} />
+                              <input name="taskId" type="hidden" value={task.id} />
+                              <select
+                                className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none transition focus:border-slate-950"
+                                defaultValue={task.assigneeId ?? ""}
+                                name="assigneeId"
+                                required
+                              >
+                                <option value="" disabled>
+                                  Assign AI agent
+                                </option>
+                                {aiAgents.map((agent) => (
+                                  <option key={agent.userId} value={agent.userId}>
+                                    {agent.displayName ?? agent.user.name ?? "AI agent"}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={aiAgents.length === 0}
+                                type="submit"
+                              >
+                                <Bot className="size-3" />
+                                Assign
+                              </button>
+                            </form>
+
+                            <form action={updateTaskStatusAction} className="grid gap-2">
+                              <input name="projectId" type="hidden" value={project.id} />
+                              <input name="taskId" type="hidden" value={task.id} />
+                              <select
+                                className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none transition focus:border-slate-950"
+                                defaultValue={task.status === "accepted" ? "done" : task.status}
+                                name="status"
+                              >
+                                {manualStatuses.map((status) => (
+                                  <option key={status.value} value={status.value}>
+                                    {status.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none transition focus:border-slate-950"
+                                name="progress"
+                                placeholder="Progress note"
+                              />
+                              <button
+                                className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 transition hover:bg-slate-50"
+                                type="submit"
+                              >
+                                <Activity className="size-3" />
+                                Update
+                              </button>
+                            </form>
+
+                            <form action={submitPullRequestAction} className="grid gap-2">
+                              <input name="projectId" type="hidden" value={project.id} />
+                              <input name="taskId" type="hidden" value={task.id} />
+                              <input
+                                className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none transition focus:border-slate-950"
+                                name="pullRequestUrl"
+                                placeholder="https://github.com/.../pull/1"
+                                required
+                                type="url"
+                              />
+                              <input
+                                className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none transition focus:border-slate-950"
+                                name="branch"
+                                placeholder="story/us-1"
+                              />
+                              <button
+                                className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-slate-950 px-2 text-xs font-medium text-white transition hover:bg-slate-800"
+                                type="submit"
+                              >
+                                <GitBranch className="size-3" />
+                                Link PR
+                              </button>
+                            </form>
+
+                            {task.status === "review" ? (
+                              <div className="grid gap-2 rounded-md border border-amber-200 bg-amber-50 p-2">
+                                <form action={reviewTaskAction} className="grid gap-2">
+                                  <input
+                                    name="projectId"
+                                    type="hidden"
+                                    value={project.id}
+                                  />
+                                  <input name="taskId" type="hidden" value={task.id} />
+                                  <input name="decision" type="hidden" value="approve" />
+                                  <button
+                                    className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-emerald-700 px-2 text-xs font-medium text-white transition hover:bg-emerald-800"
+                                    type="submit"
+                                  >
+                                    <ShieldCheck className="size-3" />
+                                    Approve
+                                  </button>
+                                </form>
+                                <form action={reviewTaskAction} className="grid gap-2">
+                                  <input
+                                    name="projectId"
+                                    type="hidden"
+                                    value={project.id}
+                                  />
+                                  <input name="taskId" type="hidden" value={task.id} />
+                                  <input name="decision" type="hidden" value="reject" />
+                                  <input
+                                    className="h-9 rounded-md border border-amber-300 bg-white px-2 text-xs outline-none transition focus:border-amber-700"
+                                    name="feedback"
+                                    placeholder="Feedback for rework"
+                                  />
+                                  <button
+                                    className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-amber-300 bg-white px-2 text-xs font-medium text-amber-900 transition hover:bg-amber-100"
+                                    type="submit"
+                                  >
+                                    Reject
+                                  </button>
+                                </form>
+                              </div>
+                            ) : null}
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 
