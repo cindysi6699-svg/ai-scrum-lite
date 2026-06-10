@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,7 +51,7 @@ type WorkTask = {
   priority: string;
   assigneeId: string | null;
   assignee: { name: string | null } | null;
-  backlogItem: { title: string } | null;
+  backlogItem: { id: string; title: string } | null;
   githubRefs: Array<{ pullRequestUrl: string | null; branch: string | null }>;
   updates: Array<{ progress: string }>;
 };
@@ -61,7 +62,30 @@ type BacklogItem = {
   description: string | null;
   parentId: string | null;
   priority: string;
+  status: string;
 };
+
+type BacklogStoryRow = {
+  code: string;
+  title: string;
+  status: "执行中" | "待验收" | "返工中" | "To Do";
+  points: number;
+};
+
+type BacklogEpicRow = {
+  code: string;
+  title: string;
+  priority: "Must" | "Should" | "Could";
+  sprintLabel: string;
+  progressLabel?: string;
+  progressWidth?: string;
+  badges?: Array<"红线" | "第 1 痛点">;
+  stories: BacklogStoryRow[];
+  emptyText?: string;
+  defaultOpen?: boolean;
+};
+
+type WorkspaceView = "board" | "backlog" | "dash" | "review";
 
 const boardColumns: BoardColumn[] = [
   {
@@ -100,6 +124,34 @@ const boardColumns: BoardColumn[] = [
 
 const agentStatuses = ["in_progress", "blocked", "review"];
 
+function normalizeWorkspaceView(view: string | string[] | undefined): WorkspaceView {
+  const value = Array.isArray(view) ? view[0] : view;
+
+  if (value === "backlog" || value === "dash" || value === "review") {
+    return value;
+  }
+
+  return "board";
+}
+
+function projectViewHref(projectId: string, view: WorkspaceView) {
+  return view === "board"
+    ? `/projects/${projectId}`
+    : `/projects/${projectId}?view=${view}`;
+}
+
+function topNavClassName(active: boolean) {
+  return active
+    ? "relative px-3 py-2 text-[#18181b] after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[#4f7cff]"
+    : "relative px-3 py-2 text-[#71717a] hover:text-[#18181b]";
+}
+
+function topNavWithBadgeClassName(active: boolean) {
+  return active
+    ? "relative flex items-center gap-1.5 px-3 py-2 text-[#18181b] after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[#4f7cff]"
+    : "relative flex items-center gap-1.5 px-3 py-2 text-[#71717a] hover:text-[#18181b]";
+}
+
 function nativeControlClassName() {
   return "h-8 w-full rounded-md border border-[#e4e4e7] bg-white px-2 text-xs text-[#3f3f46] outline-none transition focus-visible:border-[#4f7cff] focus-visible:ring-2 focus-visible:ring-[#eef2ff]";
 }
@@ -122,13 +174,190 @@ function pullRequestNumber(url: string | null | undefined) {
   return url?.split("/").pop() ?? "";
 }
 
+function backlogCode(title: string) {
+  return title.match(/^(E\d+|US-\d+)/)?.[1] ?? "";
+}
+
+function cleanBacklogTitle(title: string) {
+  return title.replace(/^(E\d+|US-\d+)\s+/, "");
+}
+
+function storyStatusClassName(status: BacklogStoryRow["status"]) {
+  if (status === "执行中") {
+    return "flex items-center gap-1 text-[11px] text-[#3a5bd0]";
+  }
+
+  if (status === "待验收") {
+    return "flex items-center gap-1 text-[11px] text-[#b45309]";
+  }
+
+  if (status === "返工中") {
+    return "flex items-center gap-1 text-[11px] text-[#be123c]";
+  }
+
+  return "text-[11px] text-[#a1a1aa]";
+}
+
+function storyStatusDotClassName(status: BacklogStoryRow["status"]) {
+  if (status === "执行中") {
+    return "bg-[#4f7cff]";
+  }
+
+  if (status === "待验收") {
+    return "bg-amber-500";
+  }
+
+  if (status === "返工中") {
+    return "bg-rose-500";
+  }
+
+  return "";
+}
+
+function priorityTone(priority: BacklogEpicRow["priority"]) {
+  if (priority === "Must") {
+    return "bg-rose-100 text-[#be123c]";
+  }
+
+  if (priority === "Should") {
+    return "bg-amber-100 text-[#b45309]";
+  }
+
+  return "bg-zinc-100 text-[#71717a]";
+}
+
+function buildBacklogRows(epics: BacklogItem[], stories: BacklogItem[]) {
+  const epicByCode = new Map(epics.map((epic) => [backlogCode(epic.title), epic]));
+  const storyByCode = new Map(stories.map((story) => [backlogCode(story.title), story]));
+  const storyTitle = (code: string, fallback: string) => {
+    const story = storyByCode.get(code);
+
+    return story ? cleanBacklogTitle(story.title) : fallback;
+  };
+  const epicTitle = (code: string, fallback: string) => {
+    const epic = epicByCode.get(code);
+
+    return epic ? cleanBacklogTitle(epic.title) : fallback;
+  };
+
+  return [
+    {
+      code: "E1",
+      title: epicTitle("E1", "核心 Scrum 看板"),
+      priority: "Must",
+      sprintLabel: "S1",
+      progressLabel: "2/4 done",
+      progressWidth: "w-1/2",
+      defaultOpen: true,
+      stories: [
+        {
+          code: "US-1",
+          title: storyTitle("US-1", "看板与 Story 基础数据模型"),
+          status: "执行中",
+          points: 3,
+        },
+        {
+          code: "US-6",
+          title: storyTitle("US-6", "看板列拖拽流转 + 状态留痕"),
+          status: "To Do",
+          points: 2,
+        },
+      ],
+    },
+    {
+      code: "E2",
+      title: epicTitle("E2", "Agent 作为一等成员"),
+      priority: "Must",
+      sprintLabel: "S1 · 核心差异化",
+      stories: [
+        {
+          code: "US-2",
+          title: storyTitle("US-2", "把 Story 指派给 Agent(含离线防呆)"),
+          status: "待验收",
+          points: 3,
+        },
+      ],
+    },
+    {
+      code: "E3",
+      title: epicTitle("E3", "Agent 执行流水线"),
+      priority: "Must",
+      sprintLabel: "S1-S2",
+      stories: [
+        {
+          code: "US-3",
+          title: storyTitle("US-3", "领取->分支->写码->测->提 PR"),
+          status: "执行中",
+          points: 5,
+        },
+        {
+          code: "US-7",
+          title: storyTitle("US-7", "认领锁:防多 agent 抢同一 story"),
+          status: "返工中",
+          points: 3,
+        },
+      ],
+    },
+    {
+      code: "E4",
+      title: epicTitle("E4", "状态自动回填"),
+      priority: "Must",
+      sprintLabel: "S2",
+      stories: [
+        {
+          code: "US-5",
+          title: storyTitle("US-5", "agent 活动事件 -> 看板列流转"),
+          status: "To Do",
+          points: 3,
+        },
+      ],
+    },
+    {
+      code: "E5",
+      title: epicTitle("E5", "人类审批闸门"),
+      priority: "Must",
+      sprintLabel: "S1-S2",
+      badges: ["红线"],
+      stories: [
+        {
+          code: "US-4",
+          title: storyTitle("US-4", "验收队列 + 通过/打回 + push 硬门禁"),
+          status: "待验收",
+          points: 5,
+        },
+      ],
+    },
+    {
+      code: "E6",
+      title: epicTitle("E6", "多 Agent 可观测面板"),
+      priority: "Should",
+      sprintLabel: "S3",
+      badges: ["第 1 痛点"],
+      stories: [],
+      emptyText: "\"10 个 agent 谁在做什么、卡在哪\" - 待拆 story",
+    },
+    {
+      code: "E7",
+      title: epicTitle("E7", "反馈返工闭环增强"),
+      priority: "Could",
+      sprintLabel: "S3+",
+      stories: [],
+      emptyText: "打回原因结构化 · agent 带反馈精准重做 - 待拆 story",
+    },
+  ] satisfies BacklogEpicRow[];
+}
+
 export default async function ProjectWorkspacePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams?: Promise<{ view?: string | string[] }>;
 }) {
   const user = await requireUser();
   const { projectId } = await params;
+  const query = await searchParams;
+  const view = normalizeWorkspaceView(query?.view);
   const project = await getProjectForUser(projectId, user.id);
 
   if (!project) {
@@ -159,6 +388,7 @@ export default async function ProjectWorkspacePage({
     (sum, task) => sum + priorityPoints(task.priority),
     0,
   );
+  const workspaceActive = view === "board" || view === "backlog";
 
   return (
     <main className="min-h-screen bg-[#f7f7f8] text-[#3f3f46] antialiased">
@@ -174,21 +404,27 @@ export default async function ProjectWorkspacePage({
         </div>
 
         <nav className="flex items-center gap-1 text-sm">
-          <a
-            className="relative px-3 py-2 text-[#18181b] after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[#4f7cff]"
-            href="#board"
+          <Link
+            className={topNavClassName(workspaceActive)}
+            href={projectViewHref(project.id, "board")}
           >
             工作台
-          </a>
-          <span className="relative flex items-center gap-1.5 px-3 py-2 text-[#71717a]">
-            <a href="#sprint-dashboard">Sprint 仪表盘</a>
-          </span>
-          <span className="relative flex items-center gap-1.5 px-3 py-2 text-[#71717a]">
-            <a href="#review-gate">验收闸门</a>
+          </Link>
+          <Link
+            className={topNavClassName(view === "dash")}
+            href={projectViewHref(project.id, "dash")}
+          >
+            Sprint 仪表盘
+          </Link>
+          <Link
+            className={topNavWithBadgeClassName(view === "review")}
+            href={projectViewHref(project.id, "review")}
+          >
+            验收闸门
             <span className="rounded-full bg-amber-100 px-1.5 text-[10px] text-[#b45309]">
               {reviewTasks.length}
             </span>
-          </span>
+          </Link>
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
@@ -213,88 +449,21 @@ export default async function ProjectWorkspacePage({
         </div>
       </header>
 
-      <section className="px-4 py-4" id="board">
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <div className="inline-flex rounded-lg border border-[#e4e4e7] bg-white p-0.5 text-xs">
-            <button className="rounded-md bg-[#4f7cff] px-2.5 py-1 font-medium text-white">
-              看板
-            </button>
-            <a className="rounded-md px-2.5 py-1 text-[#71717a]" href="#backlog">
-              Backlog
-            </a>
-          </div>
-          <h1 className="text-lg font-semibold text-[#18181b]">
-            {latestSprint?.name ?? "Sprint 1"} · Walking Skeleton
-          </h1>
-          <span className="rounded-md border border-[#e4e4e7] bg-white px-2 py-0.5 text-xs text-[#71717a]">
-            6.10 → 6.17 · 还剩 4 天
-          </span>
-          <div className="flex items-center gap-2 text-xs text-[#71717a]">
-            <div className="h-1.5 w-40 overflow-hidden rounded-full bg-zinc-200">
-              <div
-                className="h-full bg-[#4f7cff]"
-                style={{ width: progressWidth(donePoints, totalPoints) }}
-              />
-            </div>
-            <span>
-              {donePoints} / {totalPoints} pts
-            </span>
-          </div>
-          <button className="ml-auto flex items-center gap-1.5 rounded-lg bg-[#4f7cff] px-3 py-1.5 text-xs font-medium text-white transition active:scale-[.98]">
-            <Plus className="size-3.5" strokeWidth={2} />
-            新建 Story
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {boardColumns.map((column) => {
-            const columnTasks = sprintTasks.filter((task) =>
-              column.statuses.includes(task.status),
-            );
-
-            return (
-              <section
-                className={`flex flex-col rounded-xl border ${column.panelClass}`}
-                key={column.key}
-              >
-                <div className="flex items-center justify-between px-3 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${column.dotClass}`} />
-                    <span className="text-sm font-medium text-[#3f3f46]">
-                      {column.title}
-                    </span>
-                  </div>
-                  <span
-                    className={`rounded-full px-1.5 text-xs ${column.countClass}`}
-                  >
-                    {columnTasks.length}
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-2 px-2 pb-2">
-                  {columnTasks.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-[#e4e4e7] bg-white/70 px-3 py-8 text-center text-xs text-[#a1a1aa]">
-                      暂无卡片
-                    </div>
-                  ) : (
-                    columnTasks.map((task, index) => (
-                      <TaskCard
-                        agents={aiAgents}
-                        key={task.id}
-                        projectId={project.id}
-                        task={task}
-                        userInitial={user.name?.slice(0, 1).toUpperCase() ?? "Y"}
-                        usLabel={`US-${index + 1}`}
-                      />
-                    ))
-                  )}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-
-        <BacklogView epics={epics} stories={stories} />
+      {view === "board" ? (
+        <BoardView
+          aiAgents={aiAgents}
+          donePoints={donePoints}
+          latestSprintName={latestSprint?.name ?? "Sprint 1"}
+          projectId={project.id}
+          sprintTasks={sprintTasks}
+          totalPoints={totalPoints}
+          userInitial={user.name?.slice(0, 1).toUpperCase() ?? "Y"}
+        />
+      ) : null}
+      {view === "backlog" ? (
+        <BacklogView epics={epics} projectId={project.id} stories={stories} />
+      ) : null}
+      {view === "dash" ? (
         <SprintDashboard
           activeAgents={activeAgents.length}
           blockedTasks={blockedTasks.length}
@@ -304,33 +473,147 @@ export default async function ProjectWorkspacePage({
           sprintTasks={sprintTasks.length}
           totalPoints={totalPoints}
         />
+      ) : null}
+      {view === "review" ? (
         <ReviewGate projectId={project.id} reviewTasks={reviewTasks} />
-      </section>
+      ) : null}
     </main>
+  );
+}
+
+function BoardView({
+  aiAgents,
+  donePoints,
+  latestSprintName,
+  projectId,
+  sprintTasks,
+  totalPoints,
+  userInitial,
+}: {
+  aiAgents: AgentMember[];
+  donePoints: number;
+  latestSprintName: string;
+  projectId: string;
+  sprintTasks: WorkTask[];
+  totalPoints: number;
+  userInitial: string;
+}) {
+  return (
+    <section className="px-4 py-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-[#e4e4e7] bg-white p-0.5 text-xs">
+          <span className="rounded-md bg-[#4f7cff] px-2.5 py-1 font-medium text-white">
+            看板
+          </span>
+          <Link
+            className="rounded-md px-2.5 py-1 text-[#71717a] hover:text-[#18181b]"
+            href={projectViewHref(projectId, "backlog")}
+          >
+            Backlog
+          </Link>
+        </div>
+        <h1 className="text-lg font-semibold text-[#18181b]">
+          {latestSprintName} · Walking Skeleton
+        </h1>
+        <span className="rounded-md border border-[#e4e4e7] bg-white px-2 py-0.5 text-xs text-[#71717a]">
+          6.10 → 6.17 · 还剩 4 天
+        </span>
+        <div className="flex items-center gap-2 text-xs text-[#71717a]">
+          <div className="h-1.5 w-40 overflow-hidden rounded-full bg-zinc-200">
+            <div
+              className="h-full bg-[#4f7cff]"
+              style={{ width: progressWidth(donePoints, totalPoints) }}
+            />
+          </div>
+          <span>
+            {donePoints} / {totalPoints} pts
+          </span>
+        </div>
+        <button className="ml-auto flex items-center gap-1.5 rounded-lg bg-[#4f7cff] px-3 py-1.5 text-xs font-medium text-white transition active:scale-[.98]">
+          <Plus className="size-3.5" strokeWidth={2} />
+          新建 Story
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {boardColumns.map((column) => {
+          const columnTasks = sprintTasks.filter((task) =>
+            column.statuses.includes(task.status),
+          );
+
+          return (
+            <section
+              className={`flex flex-col rounded-xl border ${column.panelClass}`}
+              key={column.key}
+            >
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${column.dotClass}`} />
+                  <span className="text-sm font-medium text-[#3f3f46]">
+                    {column.title}
+                  </span>
+                </div>
+                <span
+                  className={`rounded-full px-1.5 text-xs ${column.countClass}`}
+                >
+                  {columnTasks.length}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2 px-2 pb-2">
+                {columnTasks.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-[#e4e4e7] bg-white/70 px-3 py-8 text-center text-xs text-[#a1a1aa]">
+                    暂无卡片
+                  </div>
+                ) : (
+                  columnTasks.map((task, index) => (
+                    <TaskCard
+                      agents={aiAgents}
+                      key={task.id}
+                      projectId={projectId}
+                      task={task}
+                      userInitial={userInitial}
+                      usLabel={`US-${index + 1}`}
+                    />
+                  ))
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
 function BacklogView({
   epics,
+  projectId,
   stories,
 }: {
   epics: BacklogItem[];
+  projectId: string;
   stories: BacklogItem[];
 }) {
+  const rows = buildBacklogRows(epics, stories);
+
   return (
-    <section className="mx-auto mt-8 max-w-[1100px] px-0 py-5" id="backlog">
+    <section className="mx-auto max-w-[1100px] px-4 py-5">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-lg border border-[#e4e4e7] bg-white p-0.5 text-xs">
-          <a className="rounded-md px-2.5 py-1 text-[#71717a]" href="#board">
+          <Link
+            className="rounded-md px-2.5 py-1 text-[#71717a] hover:text-[#18181b]"
+            href={projectViewHref(projectId, "board")}
+          >
             看板
-          </a>
+          </Link>
           <span className="rounded-md bg-[#4f7cff] px-2.5 py-1 font-medium text-white">
             Backlog
           </span>
         </div>
         <h2 className="text-lg font-semibold text-[#18181b]">Product Backlog</h2>
         <span className="text-xs text-[#71717a]">
-          {epics.length} Epics · 优先级依据已验证痛点排序
+          {rows.length} Epics · 优先级依据已验证痛点排序
         </span>
         <div className="ml-auto flex items-center gap-2 text-xs">
           <span className="rounded-md border border-[#e4e4e7] bg-white px-2 py-1 text-[#71717a]">
@@ -365,75 +648,81 @@ function BacklogView({
       </div>
 
       <div className="space-y-2.5">
-        {epics.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="shadow-card rounded-xl border border-dashed border-[#e4e4e7] bg-white px-4 py-10 text-center text-sm text-[#a1a1aa]">
             No epics imported yet.
           </div>
         ) : (
-          epics.map((epic, index) => {
-            const linkedStories = stories.filter((story) => story.parentId === epic.id);
-            const open = index < 2;
-            const priorityTone =
-              index < 5
-                ? "bg-rose-100 text-[#be123c]"
-                : index === 5
-                  ? "bg-amber-100 text-[#b45309]"
-                  : "bg-zinc-100 text-[#71717a]";
-            const priorityLabel = index < 5 ? "Must" : index === 5 ? "Should" : "Could";
-
+          rows.map((epic) => {
             return (
               <details
                 className="shadow-card group rounded-xl border border-[#e4e4e7] bg-white"
-                key={epic.id}
-                open={open}
+                key={epic.code}
+                open={epic.defaultOpen}
               >
                 <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3">
                   <ChevronRight className="size-3.5 text-[#a1a1aa] transition group-open:rotate-90" strokeWidth={2} />
                   <span className="font-mono text-xs text-[#a1a1aa]">
-                    E{index + 1}
+                    {epic.code}
                   </span>
                   <span className="text-sm font-semibold text-[#18181b]">
                     {epic.title}
                   </span>
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] ${priorityTone}`}>
-                    {priorityLabel}
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] ${priorityTone(epic.priority)}`}>
+                    {epic.priority}
                   </span>
-                  {index === 4 ? (
-                    <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] text-[#be123c]">
-                      红线
+                  {epic.badges?.map((badge) => (
+                    <span
+                      className={
+                        badge === "红线"
+                          ? "rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] text-[#be123c]"
+                          : "rounded border border-[#4f7cff]/30 bg-[#eef2ff] px-1.5 py-0.5 text-[10px] text-[#3a5bd0]"
+                      }
+                      key={badge}
+                    >
+                      {badge}
                     </span>
-                  ) : null}
+                  ))}
                   <span className="ml-auto flex items-center gap-3 text-xs text-[#a1a1aa]">
-                    <span>S{index + 1}</span>
-                    <span className="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-200">
-                      <span className="block h-full w-1/2 bg-emerald-500" />
-                    </span>
-                    <span>{Math.min(linkedStories.length, 2)}/4 done</span>
+                    <span>{epic.sprintLabel}</span>
+                    {epic.progressLabel ? (
+                      <>
+                        <span className="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-200">
+                          <span className={`block h-full bg-emerald-500 ${epic.progressWidth ?? "w-0"}`} />
+                        </span>
+                        <span>{epic.progressLabel}</span>
+                      </>
+                    ) : null}
                   </span>
                 </summary>
-                <div className="divide-y divide-[#e4e4e7] border-t border-[#e4e4e7]">
-                  {(linkedStories.length ? linkedStories : stories.slice(0, 2)).slice(0, 2).map((story, storyIndex) => (
+                {epic.stories.length > 0 ? (
+                  <div className="divide-y divide-[#e4e4e7] border-t border-[#e4e4e7]">
+                    {epic.stories.map((story) => (
                     <div
                       className="flex items-center gap-3 px-4 py-2.5 pl-11 text-sm"
-                      key={`${epic.id}-${story.id}`}
+                      key={`${epic.code}-${story.code}`}
                     >
                       <span className="font-mono text-[11px] text-[#a1a1aa]">
-                        US-{storyIndex + 1}
+                        {story.code}
                       </span>
                       <span className="flex-1 text-[#3f3f46]">{story.title}</span>
-                      <span
-                        className={`text-[11px] ${
-                          storyIndex === 0 ? "text-[#3a5bd0]" : "text-[#a1a1aa]"
-                        }`}
-                      >
-                        {storyIndex === 0 ? "执行中" : "To Do"}
+                      <span className={storyStatusClassName(story.status)}>
+                        {story.status !== "To Do" ? (
+                          <span className={`h-1.5 w-1.5 rounded-full ${storyStatusDotClassName(story.status)}`} />
+                        ) : null}
+                        {story.status}
                       </span>
                       <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-[#71717a]">
-                        {priorityPoints(story.priority)}
+                        {story.points}
                       </span>
                     </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border-t border-[#e4e4e7] px-4 py-2.5 pl-11 text-sm text-[#a1a1aa]">
+                    {epic.emptyText}
+                  </div>
+                )}
               </details>
             );
           })
@@ -463,7 +752,7 @@ function SprintDashboard({
   const passRate = sprintTasks ? Math.round((doneTasks / sprintTasks) * 100) : 0;
 
   return (
-    <section className="mx-auto mt-8 max-w-[1100px] px-0 py-5" id="sprint-dashboard">
+    <section className="mx-auto max-w-[1100px] px-4 py-5">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold text-[#18181b]">Sprint 1 仪表盘</h2>
         <span className="rounded-md border border-[#e4e4e7] bg-white px-2 py-0.5 text-xs text-[#71717a]">
@@ -475,7 +764,7 @@ function SprintDashboard({
         <KpiCard helper="按节奏可如期完成" helperClass="text-[#047857]" label="完成 / 总点数" suffix={` / ${totalPoints}`} value={`${donePoints}`} />
         <KpiCard helper={`今日 +${reviewTasks}`} helperClass="text-[#a1a1aa]" label="Agent 提交 PR" value={`${reviewTasks + doneTasks}`} />
         <KpiCard helper={`打回 ${blockedTasks} · 注意返工成本`} helperClass="text-[#be123c]" label="验收通过率" value={`${passRate}%`} />
-        <KpiCard helper="⚠ 闸门趋于瓶颈" helperClass="text-[#b45309]" label="平均验收等待" suffix="min" value="38" />
+        <KpiCard helper="闸门趋于瓶颈" helperClass="text-[#b45309]" label="平均验收等待" suffix="min" value="38" />
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
@@ -504,7 +793,7 @@ function SprintDashboard({
             <text fill="#a1a1aa" fontSize="9" x="20" y="124">10</text>
             <text fill="#a1a1aa" fontSize="9" x="26" y="173">0</text>
             <line stroke="#d4d4d8" strokeDasharray="4 4" strokeWidth="2" x1="40" x2="510" y1="20" y2="170" />
-            <polyline fill="none" points="40,20 107,28 174,52 241,86" stroke="#4f7cff" strokeLinejoin="round" strokeWidth="2.5" />
+            <polyline fill="none" points="40,20 107,28 174,52 241,86" stroke="#4f7cff" strokeLinejoin="round" strokeWidth="2" />
             <circle cx="241" cy="86" fill="#4f7cff" r="3.5" />
             <g fill="#a1a1aa" fontSize="9" textAnchor="middle">
               <text x="40" y="185">D1</text>
@@ -590,7 +879,7 @@ function ActivityLine({
 }: {
   actor: string;
   color: string;
-  detail: string;
+  detail: ReactNode;
   time: string;
 }) {
   return (
@@ -613,7 +902,7 @@ function ReviewGate({
   const selectedTask = reviewTasks[0];
 
   return (
-    <section className="mt-8 border-t border-[#e4e4e7]" id="review-gate">
+    <section>
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr]">
         <aside className="border-b border-[#e4e4e7] lg:min-h-[calc(100dvh-3.5rem)] lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between px-4 py-3">
@@ -673,8 +962,8 @@ function ReviewGate({
                     PR #{pullRequestNumber(selectedTask.githubRefs[0]?.pullRequestUrl) || "128"} · {selectedTask.githubRefs[0]?.branch ?? "feat/us-4-approval-gate"} · {selectedTask.assignee?.name ?? "agent-01"}
                   </p>
                 </div>
-                <div className="ml-auto flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-[#b45309]">
-                  <LockKeyhole className="size-3.5" strokeWidth={2} />
+                <div className="ml-auto flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-[#b45309]">
+                  <LockKeyhole className="size-4" strokeWidth={2} />
                   未验收 · push 被阻止
                 </div>
               </div>
@@ -751,7 +1040,7 @@ function ReviewGate({
                     <input name="taskId" type="hidden" value={selectedTask.id} />
                     <input name="decision" type="hidden" value="approve" />
                     <Button className="bg-emerald-600 font-semibold hover:bg-emerald-500" type="submit">
-                      <Check className="size-4" strokeWidth={2.5} />
+                      <Check className="size-4" strokeWidth={2} />
                       通过验收 · 解锁 push
                     </Button>
                   </form>
