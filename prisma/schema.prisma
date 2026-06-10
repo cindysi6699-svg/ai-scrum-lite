@@ -1,0 +1,383 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserType {
+  human
+  ai
+}
+
+enum ProjectRole {
+  owner
+  scrum_master
+  product
+  design
+  dev
+  qa
+  viewer
+}
+
+enum ProjectStatus {
+  active
+  paused
+  archived
+}
+
+enum SprintStatus {
+  planning
+  active
+  closed
+  cancelled
+}
+
+enum WorkItemType {
+  epic
+  story
+  task
+  bug
+}
+
+enum Priority {
+  P0
+  P1
+  P2
+  P3
+}
+
+enum BacklogStatus {
+  backlog
+  ready
+  in_sprint
+  done
+  archived
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  blocked
+  review
+  done
+  accepted
+}
+
+enum BlockerStatus {
+  open
+  resolved
+  ignored
+}
+
+enum DecisionType {
+  product
+  technical
+  scope
+  acceptance
+  process
+  other
+}
+
+model User {
+  id                String    @id @default(cuid())
+  name              String?
+  email             String?   @unique
+  emailVerified     DateTime?
+  image             String?
+  type              UserType  @default(human)
+  provider          String?
+  providerAccountId String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  projectMembers   ProjectMember[]
+  createdProjects  Project[]       @relation("ProjectCreator")
+  createdBacklog   BacklogItem[]   @relation("BacklogCreator")
+  createdTasks     Task[]          @relation("TaskCreator")
+  assignedTasks    Task[]          @relation("TaskAssignee")
+  taskUpdates      TaskUpdate[]
+  createdBlockers  Blocker[]       @relation("BlockerCreator")
+  ownedBlockers    Blocker[]       @relation("BlockerOwner")
+  resolvedBlockers Blocker[]       @relation("BlockerResolver")
+  decisions        Decision[]
+  githubRefs       GithubRef[]
+  summaries        Summary[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  goal        String?
+  repoUrl     String?
+  status      ProjectStatus @default(active)
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  createdBy  User            @relation("ProjectCreator", fields: [createdById], references: [id])
+  members    ProjectMember[]
+  sprints    Sprint[]
+  backlog    BacklogItem[]
+  tasks      Task[]
+  blockers   Blocker[]
+  decisions  Decision[]
+  githubRefs GithubRef[]
+  summaries  Summary[]
+
+  @@index([createdById])
+  @@index([status])
+}
+
+model ProjectMember {
+  id          String      @id @default(cuid())
+  projectId   String
+  userId      String
+  role        ProjectRole
+  displayName String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+model Sprint {
+  id        String       @id @default(cuid())
+  projectId String
+  name      String
+  goal      String?
+  status    SprintStatus @default(planning)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+  summaries Summary[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model BacklogItem {
+  id                 String        @id @default(cuid())
+  projectId          String
+  parentId           String?
+  title              String
+  description        String?
+  type               WorkItemType
+  priority           Priority      @default(P2)
+  status             BacklogStatus @default(backlog)
+  userStory          String?
+  acceptanceCriteria String?
+  createdById        String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    BacklogItem?  @relation("BacklogHierarchy", fields: [parentId], references: [id])
+  children  BacklogItem[] @relation("BacklogHierarchy")
+  createdBy User          @relation("BacklogCreator", fields: [createdById], references: [id])
+  tasks     Task[]
+
+  @@index([projectId])
+  @@index([parentId])
+  @@index([status])
+  @@index([priority])
+}
+
+model Task {
+  id                 String       @id @default(cuid())
+  projectId          String
+  sprintId           String
+  backlogItemId      String?
+  title              String
+  description        String?
+  type               WorkItemType @default(task)
+  priority           Priority     @default(P2)
+  status             TaskStatus   @default(todo)
+  assigneeId         String?
+  userStory          String?
+  acceptanceCriteria String?
+  createdById        String
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  startedAt          DateTime?
+  completedAt        DateTime?
+  acceptedAt         DateTime?
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint      Sprint       @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  backlogItem BacklogItem? @relation(fields: [backlogItemId], references: [id])
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy   User         @relation("TaskCreator", fields: [createdById], references: [id])
+  updates     TaskUpdate[]
+  blockers    Blocker[]
+  decisions   Decision[]
+  githubRefs  GithubRef[]
+
+  @@index([projectId])
+  @@index([sprintId])
+  @@index([status])
+  @@index([assigneeId])
+}
+
+model TaskUpdate {
+  id                 String      @id @default(cuid())
+  taskId             String
+  actorId            String
+  previousStatus     TaskStatus?
+  newStatus          TaskStatus?
+  progress           String
+  blockers           Json?
+  nextStep           String?
+  artifacts          Json?
+  needsHumanDecision Boolean     @default(false)
+  rawPayload         Json?
+  createdAt          DateTime    @default(now())
+
+  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([taskId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model Blocker {
+  id           String        @id @default(cuid())
+  projectId    String
+  taskId       String?
+  title        String
+  description  String?
+  status       BlockerStatus @default(open)
+  ownerId      String?
+  createdById  String
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task       Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  owner      User?   @relation("BlockerOwner", fields: [ownerId], references: [id])
+  createdBy  User    @relation("BlockerCreator", fields: [createdById], references: [id])
+  resolvedBy User?   @relation("BlockerResolver", fields: [resolvedById], references: [id])
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([status])
+  @@index([ownerId])
+}
+
+model Decision {
+  id         String       @id @default(cuid())
+  projectId  String
+  taskId     String?
+  madeById   String
+  type       DecisionType @default(other)
+  title      String
+  decision   String
+  reason     String?
+  impact     String?
+  reversible Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  madeBy  User    @relation(fields: [madeById], references: [id])
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([madeById])
+}
+
+model GithubRef {
+  id             String   @id @default(cuid())
+  projectId      String
+  taskId         String
+  branch         String?
+  commitHash     String?
+  pullRequestUrl String?
+  checksStatus   String?
+  note           String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([commitHash])
+}
+
+model Summary {
+  id            String   @id @default(cuid())
+  projectId     String
+  sprintId      String?
+  type          String
+  title         String
+  content       String
+  generatedById String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint      Sprint? @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  generatedBy User?   @relation(fields: [generatedById], references: [id])
+
+  @@index([projectId])
+  @@index([sprintId])
+  @@index([type])
+}
