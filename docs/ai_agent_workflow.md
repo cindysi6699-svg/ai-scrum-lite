@@ -160,9 +160,13 @@ Use compact, stable layouts. Avoid decorative marketing patterns in authenticate
 At minimum run:
 
 ```bash
-pnpm lint
-pnpm exec tsc --noEmit
-pnpm build
+pnpm verify
+```
+
+For route, auth, or deployment-sensitive changes, also run:
+
+```bash
+pnpm smoke
 ```
 
 For database changes, also run:
