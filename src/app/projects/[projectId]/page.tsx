@@ -156,7 +156,7 @@ export default async function ProjectWorkspacePage({
   return (
     <main className="min-h-screen bg-[#f6f6f7] text-[#202126]">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="flex h-20 items-center justify-between px-5">
+        <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-5">
           <div className="flex items-center gap-4">
             <Link
               className="flex size-10 items-center justify-center rounded-lg bg-[#4f7cff] text-white shadow-sm"
@@ -172,14 +172,14 @@ export default async function ProjectWorkspacePage({
             </div>
           </div>
 
-          <nav className="hidden items-center gap-7 text-base font-medium text-slate-500 md:flex">
-            <a className="border-b-3 border-[#4f7cff] px-1 py-7 text-[#202126]" href="#board">
+          <nav className="hidden items-center gap-7 text-sm font-medium text-slate-500 md:flex">
+            <a className="border-b-3 border-[#4f7cff] px-1 py-5 text-[#202126]" href="#board">
               工作台
             </a>
-            <a className="px-1 py-7 transition hover:text-[#202126]" href="#metrics">
+            <a className="px-1 py-5 transition hover:text-[#202126]" href="#metrics">
               Sprint 仪表盘
             </a>
-            <a className="flex items-center gap-2 px-1 py-7 transition hover:text-[#202126]" href="#review">
+            <a className="flex items-center gap-2 px-1 py-5 transition hover:text-[#202126]" href="#review">
               验收闸门
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
                 {reviewTasks.length}
@@ -214,7 +214,7 @@ export default async function ProjectWorkspacePage({
         </div>
       </header>
 
-      <section className="mx-auto max-w-[1760px] px-5 py-6">
+      <section className="mx-auto max-w-[1280px] px-5 py-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
@@ -230,7 +230,7 @@ export default async function ProjectWorkspacePage({
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-normal">
+                <h1 className="text-xl font-semibold tracking-normal md:text-2xl">
                   {latestSprint?.name ?? "Sprint 1"} · Walking Skeleton
                 </h1>
                 <Badge className="border border-slate-200 bg-white text-slate-500">
@@ -256,7 +256,7 @@ export default async function ProjectWorkspacePage({
 
           <form
             action={createStoryTaskAction}
-            className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm xl:grid-cols-[220px_260px_220px_auto]"
+            className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm xl:grid-cols-[180px_210px_180px_auto]"
           >
             <input name="projectId" type="hidden" value={project.id} />
             <Input name="title" placeholder="新建 Story 标题" required />
@@ -293,8 +293,8 @@ export default async function ProjectWorkspacePage({
             >
               <p className="text-sm font-medium text-slate-500">{label}</p>
               <div className="mt-3 flex items-end gap-1">
-                <p className="text-4xl font-semibold tracking-normal">{value}</p>
-                <p className="pb-1 text-xl font-semibold text-slate-400">{suffix}</p>
+                <p className="text-3xl font-semibold tracking-normal">{value}</p>
+                <p className="pb-0.5 text-lg font-semibold text-slate-400">{suffix}</p>
               </div>
               <p className={`mt-3 text-sm font-medium ${tone}`}>{helper}</p>
             </div>
@@ -309,7 +309,7 @@ export default async function ProjectWorkspacePage({
 
             return (
               <section
-                className={`min-h-[640px] rounded-xl border border-slate-200 shadow-sm ${column.panel}`}
+                className={`min-h-[560px] rounded-xl border border-slate-200 shadow-sm ${column.panel}`}
                 key={column.key}
               >
                 <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">

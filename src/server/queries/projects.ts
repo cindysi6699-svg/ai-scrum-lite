@@ -15,6 +15,26 @@ export async function getProjectsForUser(userId: string) {
         where: {
           status: "active",
         },
+        include: {
+          tasks: {
+            where: {
+              status: "review",
+            },
+            include: {
+              assignee: true,
+              githubRefs: {
+                orderBy: {
+                  createdAt: "desc",
+                },
+                take: 1,
+              },
+            },
+            orderBy: {
+              updatedAt: "desc",
+            },
+            take: 3,
+          },
+        },
         orderBy: {
           updatedAt: "desc",
         },
