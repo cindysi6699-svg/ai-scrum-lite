@@ -37,3 +37,46 @@ export async function getProjectsForUser(userId: string) {
     },
   });
 }
+
+export async function getProjectForUser(projectId: string, userId: string) {
+  return prisma.project.findFirst({
+    where: {
+      id: projectId,
+      members: {
+        some: {
+          userId,
+        },
+      },
+    },
+    include: {
+      members: {
+        include: {
+          user: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+      sprints: {
+        orderBy: {
+          updatedAt: "desc",
+        },
+        take: 5,
+      },
+      _count: {
+        select: {
+          backlog: true,
+          blockers: {
+            where: {
+              status: "open",
+            },
+          },
+          decisions: true,
+          githubRefs: true,
+          sprints: true,
+          tasks: true,
+        },
+      },
+    },
+  });
+}

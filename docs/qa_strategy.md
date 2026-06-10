@@ -82,6 +82,7 @@ The smoke script currently checks:
 - Home page renders.
 - Dashboard is protected.
 - New project page is protected.
+- Project workspace page is protected.
 - NextAuth sign-in page renders with GitHub provider.
 
 This is intentionally small and fast. Add checks as the MVP grows.

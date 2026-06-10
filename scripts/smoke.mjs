@@ -37,6 +37,19 @@ const checks = [
     },
   },
   {
+    name: "Project workspace is protected",
+    path: "/projects/smoke-project-id",
+    redirect: "manual",
+    expect: async (response) => {
+      assert(
+        [302, 303, 307, 308].includes(response.status),
+        `expected redirect for unauthenticated project workspace, got ${response.status}`,
+      );
+      const location = response.headers.get("location") ?? "";
+      assert(location.includes("/api/auth/signin"), `expected signin redirect, got ${location}`);
+    },
+  },
+  {
     name: "NextAuth signin page renders",
     path: "/api/auth/signin",
     expect: async (response, body) => {

@@ -1,4 +1,4 @@
-import { AlertCircle, FolderKanban, Plus, Users } from "lucide-react";
+import { AlertCircle, ArrowRight, FolderKanban, Plus, Users } from "lucide-react";
 import Link from "next/link";
 
 import { requireUser } from "@/server/auth/session";
@@ -158,9 +158,13 @@ export default async function DashboardPage({
                         {project.members.length} member
                         {project.members.length === 1 ? "" : "s"}
                       </div>
-                      <span className="text-sm font-medium text-slate-500">
-                        Project workspace coming next
-                      </span>
+                      <Link
+                        className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+                        href={`/projects/${project.id}`}
+                      >
+                        Open Project
+                        <ArrowRight className="size-4" />
+                      </Link>
                     </div>
                   </article>
                 );
