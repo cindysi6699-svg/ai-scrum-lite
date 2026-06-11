@@ -13,6 +13,7 @@ const createStorySchema = z.object({
   title: z.string().trim().min(3),
   userStory: z.string().trim().min(10),
   acceptanceCriteria: z.string().trim().min(10),
+  priority: z.enum(["P0", "P1", "P2", "P3"]).default("P1"),
 });
 
 const createAgentSchema = z.object({
@@ -93,6 +94,7 @@ export async function createStoryTaskAction(formData: FormData) {
     title: formData.get("title"),
     userStory: formData.get("userStory"),
     acceptanceCriteria: formData.get("acceptanceCriteria"),
+    priority: formData.get("priority") || "P1",
   });
 
   await requireProjectAccess(parsed.projectId, user.id);
@@ -118,7 +120,7 @@ export async function createStoryTaskAction(formData: FormData) {
         title: parsed.title,
         description: parsed.userStory,
         type: "story",
-        priority: "P1",
+        priority: parsed.priority,
         status: "in_sprint",
         userStory: parsed.userStory,
         acceptanceCriteria: parsed.acceptanceCriteria,
@@ -134,7 +136,7 @@ export async function createStoryTaskAction(formData: FormData) {
         title: parsed.title,
         description: parsed.userStory,
         type: "task",
-        priority: "P1",
+        priority: parsed.priority,
         status: "todo",
         userStory: parsed.userStory,
         acceptanceCriteria: parsed.acceptanceCriteria,

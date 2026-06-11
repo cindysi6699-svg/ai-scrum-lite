@@ -24,6 +24,7 @@ import {
 } from "@/server/actions/tasks";
 import { requireUser } from "@/server/auth/session";
 import { getProjectForUser } from "@/server/queries/projects";
+import { NewStoryDialog } from "./new-story-dialog";
 
 type BoardColumn = {
   key: string;
@@ -529,10 +530,7 @@ function BoardView({
             {donePoints} / {totalPoints} pts
           </span>
         </div>
-        <button className="ml-auto flex items-center gap-1.5 rounded-lg bg-[#4f7cff] px-3 py-1.5 text-xs font-medium text-white transition active:scale-[.98]">
-          <Plus className="size-3.5" strokeWidth={2} />
-          新建 Story
-        </button>
+        <NewStoryDialog projectId={projectId} sprintName={latestSprintName} />
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
