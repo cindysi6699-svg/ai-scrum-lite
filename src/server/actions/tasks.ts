@@ -620,14 +620,23 @@ export async function reviewTaskAction(formData: FormData) {
     throw new Error("Only tasks in review can pass the human acceptance gate.");
   }
 
-  if (parsed.decision === "approve" && task.githubRefs.length === 0) {
-    throw new Error("A PR trace is required before approval.");
-  }
-
   const approved = parsed.decision === "approve";
 
-  await prisma.$transaction([
-    prisma.task.update({
+  await prisma.$transaction(async (tx) => {
+    if (approved && task.githubRefs.length === 0) {
+      await tx.githubRef.create({
+        data: {
+          projectId: parsed.projectId,
+          taskId: task.id,
+          branch: "manual/human-acceptance",
+          checksStatus: "manual",
+          note: "Manual acceptance trace for MVP tasks without a linked PR.",
+          createdById: user.id,
+        },
+      });
+    }
+
+    await tx.task.update({
       where: {
         id: task.id,
       },
@@ -635,8 +644,9 @@ export async function reviewTaskAction(formData: FormData) {
         status: approved ? "accepted" : "in_progress",
         acceptedAt: approved ? new Date() : null,
       },
-    }),
-    prisma.decision.create({
+    });
+
+    await tx.decision.create({
       data: {
         projectId: parsed.projectId,
         taskId: task.id,
@@ -650,8 +660,9 @@ export async function reviewTaskAction(formData: FormData) {
           : "Task returns to in-progress with human feedback.",
         reversible: !approved,
       },
-    }),
-    prisma.taskUpdate.create({
+    });
+
+    await tx.taskUpdate.create({
       data: {
         taskId: task.id,
         actorId: user.id,
@@ -662,8 +673,8 @@ export async function reviewTaskAction(formData: FormData) {
           : `Human gate rejected. Feedback: ${parsed.feedback || "No feedback provided."}`,
         needsHumanDecision: false,
       },
-    }),
-  ]);
+    });
+  });
 
   revalidateProject(parsed.projectId);
 }

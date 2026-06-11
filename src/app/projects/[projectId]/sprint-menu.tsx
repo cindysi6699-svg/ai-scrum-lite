@@ -174,7 +174,6 @@ export function SprintMenu({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [source, setSource] = useState<"paste" | "upload">("paste");
   const [specJson, setSpecJson] = useState("");
   const [serverErrors, setServerErrors] = useState<Array<{ path: string; message: string }>>([]);
@@ -213,11 +212,8 @@ export function SprintMenu({
       }}
       open={dialogOpen}
     >
-      <DropdownMenu onOpenChange={setMenuOpen} open={menuOpen}>
-        <DropdownMenuTrigger
-          className="flex items-center gap-2 rounded-lg border border-[#e4e4e7] bg-white px-3 py-1.5 text-sm text-[#3f3f46]"
-          onClick={() => setMenuOpen((open) => !open)}
-        >
+      <DropdownMenu>
+        <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-[#e4e4e7] bg-white px-3 py-1.5 text-sm text-[#3f3f46]">
           <span className="text-[#a1a1aa]">Sprint</span>
           <span className="max-w-52 truncate font-medium text-[#18181b]">
             {selectedSprintName}
@@ -235,7 +231,6 @@ export function SprintMenu({
                 className={current ? "bg-[#fafafa]" : ""}
                 key={sprint.id}
                 onClick={() => {
-                  setMenuOpen(false);
                   goToSprint(sprint.id);
                 }}
               >
@@ -262,7 +257,6 @@ export function SprintMenu({
             className="text-[#3a5bd0] hover:bg-[#eef2ff] data-[highlighted]:bg-[#eef2ff]"
             closeOnClick={false}
             onClick={() => {
-              setMenuOpen(false);
               setDialogOpen(true);
             }}
           >
