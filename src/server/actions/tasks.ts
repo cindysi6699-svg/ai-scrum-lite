@@ -19,6 +19,7 @@ const optionalText = z.preprocess(
 
 const createStorySchema = z.object({
   projectId: z.string().min(1),
+  sprintId: z.string().min(1).optional(),
   title: z.string().trim().min(3),
   userStory: z.string().trim().min(10),
   acceptanceCriteria: z.string().trim().min(10),
@@ -238,6 +239,7 @@ export async function createStoryTaskAction(formData: FormData) {
   const user = await requireUser();
   const parsed = createStorySchema.parse({
     projectId: formData.get("projectId"),
+    sprintId: formData.get("sprintId") || undefined,
     title: formData.get("title"),
     userStory: formData.get("userStory"),
     acceptanceCriteria: formData.get("acceptanceCriteria"),
@@ -249,7 +251,13 @@ export async function createStoryTaskAction(formData: FormData) {
   const sprint = await prisma.sprint.findFirst({
     where: {
       projectId: parsed.projectId,
-      status: "active",
+      ...(parsed.sprintId
+        ? {
+            id: parsed.sprintId,
+          }
+        : {
+            status: "active" as const,
+          }),
     },
     orderBy: {
       updatedAt: "desc",
@@ -257,7 +265,7 @@ export async function createStoryTaskAction(formData: FormData) {
   });
 
   if (!sprint) {
-    throw new Error("Create an active sprint before adding Sprint stories.");
+    throw new Error("Select a valid Sprint before adding stories.");
   }
 
   await prisma.$transaction(async (tx) => {

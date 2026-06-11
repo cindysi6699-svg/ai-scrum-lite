@@ -38,9 +38,11 @@ function errorMessage(error: unknown) {
 
 export function NewStoryDialog({
   projectId,
+  sprintId,
   sprintName,
 }: {
   projectId: string;
+  sprintId?: string;
   sprintName: string;
 }) {
   const router = useRouter();
@@ -68,13 +70,30 @@ export function NewStoryDialog({
     event.preventDefault();
     setError(null);
 
+    const userStory = `作为${asA.trim()},我想要${iWant.trim()},以便于${soThat.trim()}`;
+
+    if (!asA.trim() || !iWant.trim() || !soThat.trim()) {
+      setError("请完整填写用户故事三段式。");
+      return;
+    }
+
+    if (userStory.length < 10) {
+      setError("用户故事太短,请补充到可验收的描述。");
+      return;
+    }
+
+    if (acceptanceCriteria.trim().length < 10) {
+      setError("验收标准太短,请至少写一条可验证标准。");
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
     formData.set("projectId", projectId);
+    if (sprintId) {
+      formData.set("sprintId", sprintId);
+    }
     formData.set("title", title.trim());
-    formData.set(
-      "userStory",
-      `作为${asA.trim()},我想要${iWant.trim()},以便于${soThat.trim()}`,
-    );
+    formData.set("userStory", userStory);
     formData.set("acceptanceCriteria", acceptanceCriteria.trim());
     formData.set("priority", priority);
 

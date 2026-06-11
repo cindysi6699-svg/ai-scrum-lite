@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,14 +20,6 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { importSprintAction } from "@/server/actions/tasks";
 
@@ -174,10 +166,12 @@ export function SprintMenu({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [source, setSource] = useState<"paste" | "upload">("paste");
   const [specJson, setSpecJson] = useState("");
   const [serverErrors, setServerErrors] = useState<Array<{ path: string; message: string }>>([]);
   const [isPending, startTransition] = useTransition();
+  const menuRef = useRef<HTMLDivElement>(null);
   const validation = useMemo(() => validateSpecInput(specJson), [specJson]);
   const visibleValidation =
     serverErrors.length > 0 ? { ok: false as const, errors: serverErrors } : validation;
@@ -191,6 +185,7 @@ export function SprintMenu({
   }
 
   function goToSprint(sprintId: string) {
+    setMenuOpen(false);
     router.push(sprintHref(sprintId));
   }
 
@@ -199,6 +194,32 @@ export function SprintMenu({
     setServerErrors([]);
     setSource("paste");
   }
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
 
   return (
     <Dialog
@@ -212,27 +233,39 @@ export function SprintMenu({
       }}
       open={dialogOpen}
     >
-      <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-[#e4e4e7] bg-white px-3 py-1.5 text-sm text-[#3f3f46]">
+      <div className="relative" ref={menuRef}>
+        <button
+          aria-expanded={menuOpen}
+          className="flex items-center gap-2 rounded-lg border border-[#e4e4e7] bg-white px-3 py-1.5 text-sm text-[#3f3f46] outline-none transition hover:border-[#d4d4d8] focus-visible:ring-2 focus-visible:ring-[#4f7cff]/20"
+          onClick={() => setMenuOpen((open) => !open)}
+          type="button"
+        >
           <span className="text-[#a1a1aa]">Sprint</span>
           <span className="max-w-52 truncate font-medium text-[#18181b]">
             {selectedSprintName}
           </span>
           <ChevronDown className="size-3.5 text-[#71717a]" strokeWidth={2} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-72">
-          <DropdownMenuLabel>切换 Sprint</DropdownMenuLabel>
+        </button>
+
+        {menuOpen ? (
+        <div className="absolute right-0 top-[calc(100%+4px)] z-40 w-72 overflow-hidden rounded-xl border border-[#e4e4e7] bg-white py-1 text-[#3f3f46] shadow-[0_12px_32px_-8px_rgba(16,24,40,.22)]">
+          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-[#a1a1aa]">
+            切换 Sprint
+          </div>
           {sprints.map((sprint) => {
             const current = sprint.id === selectedSprintId;
             const status = sprintStatusLabel(sprint.status);
 
             return (
-              <DropdownMenuItem
-                className={current ? "bg-[#fafafa]" : ""}
+              <button
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm outline-none transition hover:bg-[#fafafa] ${
+                  current ? "bg-[#fafafa]" : ""
+                }`}
                 key={sprint.id}
                 onClick={() => {
                   goToSprint(sprint.id);
                 }}
+                type="button"
               >
                 {current ? (
                   <Check className="size-3.5 text-[#4f7cff]" strokeWidth={2.5} />
@@ -249,22 +282,24 @@ export function SprintMenu({
                 <span className={`rounded px-1.5 py-0.5 text-[10px] ${status.className}`}>
                   {status.label}
                 </span>
-              </DropdownMenuItem>
+              </button>
             );
           })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-[#3a5bd0] hover:bg-[#eef2ff] data-[highlighted]:bg-[#eef2ff]"
-            closeOnClick={false}
+          <div className="my-1 border-t border-[#e4e4e7]" />
+          <button
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#3a5bd0] outline-none transition hover:bg-[#eef2ff]"
             onClick={() => {
+              setMenuOpen(false);
               setDialogOpen(true);
             }}
+            type="button"
           >
             <Plus className="size-3.5" strokeWidth={2} />
             导入 / 新建 Sprint
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </button>
+        </div>
+        ) : null}
+      </div>
 
       <DialogContent
         className="flex max-h-[calc(100dvh-32px)] max-w-[560px] flex-col overflow-hidden rounded-2xl border border-[#e4e4e7] bg-white shadow-[0_24px_60px_-12px_rgba(16,24,40,.28)]"

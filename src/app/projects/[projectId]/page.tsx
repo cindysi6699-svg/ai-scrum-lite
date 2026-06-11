@@ -854,7 +854,11 @@ function BoardView({
             {donePoints} / {totalPoints} pts
           </span>
         </div>
-        <NewStoryDialog projectId={projectId} sprintName={sprintName} />
+        <NewStoryDialog
+          projectId={projectId}
+          sprintId={selectedSprintId}
+          sprintName={sprintName}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
