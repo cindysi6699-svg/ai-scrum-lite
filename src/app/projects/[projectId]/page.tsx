@@ -25,7 +25,7 @@ import {
 import { requireUser } from "@/server/auth/session";
 import { getProjectForUser } from "@/server/queries/projects";
 import { NewStoryDialog } from "./new-story-dialog";
-import { SprintSwitcher } from "./sprint-switcher";
+import { SprintMenu } from "./sprint-menu";
 
 type BoardColumn = {
   key: string;
@@ -483,8 +483,10 @@ export default async function ProjectWorkspacePage({
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          <SprintSwitcher
+          <SprintMenu
+            projectId={project.id}
             selectedSprintId={selectedSprintId}
+            selectedSprintName={selectedSprintName}
             sprints={project.sprints.map((sprint) => ({
               id: sprint.id,
               name: sprint.name,

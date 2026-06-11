@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/server/auth/session";
+import { parseSprintSpecJson, type SprintSpecFieldError } from "./import-sprint-spec";
 
 const taskStatusValues = ["todo", "in_progress", "blocked", "review", "done"] as const;
 const optionalText = z.preprocess(
@@ -51,6 +52,10 @@ const reviewTaskSchema = taskIdSchema.extend({
   feedback: optionalText,
 });
 
+type ImportSprintResult =
+  | { ok: true; newSprintId: string }
+  | { ok: false; errors: SprintSpecFieldError[] };
+
 async function requireProjectAccess(projectId: string, userId: string) {
   const member = await prisma.projectMember.findUnique({
     where: {
@@ -89,6 +94,130 @@ async function getTaskForProject(taskId: string, projectId: string) {
 function revalidateProject(projectId: string) {
   revalidatePath("/dashboard");
   revalidatePath(`/projects/${projectId}`);
+}
+
+export async function importSprintAction(
+  projectId: string,
+  specJson: string,
+): Promise<ImportSprintResult> {
+  const user = await requireUser();
+  await requireProjectAccess(projectId, user.id);
+
+  const parsed = parseSprintSpecJson(specJson);
+
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      errors: parsed.errors,
+    };
+  }
+
+  const now = new Date();
+  const spec = parsed.data;
+
+  const sprint = await prisma.$transaction(async (tx) => {
+    await tx.sprint.updateMany({
+      where: {
+        projectId,
+        status: "active",
+      },
+      data: {
+        status: "closed",
+      },
+    });
+
+    const createdSprint = await tx.sprint.create({
+      data: {
+        projectId,
+        name: spec.sprint.name,
+        goal: spec.sprint.goal,
+        status: "active",
+        startDate: new Date(`${spec.sprint.startDate}T00:00:00.000Z`),
+        endDate: new Date(`${spec.sprint.endDate}T00:00:00.000Z`),
+      },
+    });
+
+    const epicByCode = new Map<string, { id: string }>();
+
+    for (const epic of spec.epics) {
+      const backlogEpic = await tx.backlogItem.create({
+        data: {
+          projectId,
+          title: `${epic.code} ${epic.title}`,
+          description: `价值: ${epic.value}\n目标 Sprint: ${epic.targetSprint}`,
+          type: "epic",
+          priority: epic.priority,
+          status: "ready",
+          createdById: user.id,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+
+      epicByCode.set(epic.code, backlogEpic);
+    }
+
+    for (const story of spec.stories) {
+      const parent = epicByCode.get(story.epic);
+
+      const backlogStory = await tx.backlogItem.create({
+        data: {
+          projectId,
+          parentId: parent?.id ?? null,
+          title: `${story.code} ${story.title}`,
+          description: story.userStory,
+          type: "story",
+          priority: story.priority,
+          status: "in_sprint",
+          userStory: story.userStory,
+          acceptanceCriteria: story.acceptanceCriteria,
+          createdById: user.id,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+
+      for (const taskTitle of story.tasks) {
+        const task = await tx.task.create({
+          data: {
+            projectId,
+            sprintId: createdSprint.id,
+            backlogItemId: backlogStory.id,
+            title: taskTitle,
+            description: `From ${story.code}: ${story.title}`,
+            type: "task",
+            priority:
+              taskTitle.includes("🛡") || taskTitle.includes("[TEST]") ? "P1" : story.priority,
+            status: "todo",
+            userStory: story.userStory,
+            acceptanceCriteria: story.acceptanceCriteria,
+            createdById: user.id,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+
+        await tx.taskUpdate.create({
+          data: {
+            taskId: task.id,
+            actorId: user.id,
+            newStatus: "todo",
+            progress: `Imported from ${story.code} into ${createdSprint.name}.`,
+            createdAt: now,
+          },
+        });
+      }
+    }
+
+    return createdSprint;
+  });
+
+  revalidateProject(projectId);
+
+  return {
+    ok: true,
+    newSprintId: sprint.id,
+  };
 }
 
 export async function createStoryTaskAction(formData: FormData) {

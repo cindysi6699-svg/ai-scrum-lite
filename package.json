@@ -12,6 +12,7 @@
     "e2e:ui": "playwright test --ui",
     "seed:sprint1": "node scripts/seed-sprint1.mjs",
     "seed:e2e": "node scripts/seed-e2e.mjs",
+    "test:unit": "node --test --experimental-strip-types tests/unit/*.test.ts",
     "verify": "pnpm lint && pnpm exec tsc --noEmit && pnpm build && pnpm e2e",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
