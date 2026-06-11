@@ -134,6 +134,9 @@ test("US-8 Sprint 切换器:?sprint 渲染目标 sprint,非法 id 回退默认 a
   await expect(page.getByRole("button", { name: /Sprint/ })).toContainText(
     targetSprint.name,
   );
+  await page.getByRole("button", { name: /Sprint/ }).click();
+  await expect(page.getByText("切换 Sprint")).toBeVisible();
+  await expect(page.getByText("导入 / 新建 Sprint")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: new RegExp(targetSprint.name) }),
   ).toBeVisible();
