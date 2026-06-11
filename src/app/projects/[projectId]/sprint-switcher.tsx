@@ -19,12 +19,12 @@ export function SprintSwitcher({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  if (sprints.length <= 1) {
+  if (sprints.length === 0) {
     return null;
   }
 
   return (
-    <label className="hidden items-center gap-2 rounded-lg border border-[#e4e4e7] bg-[#fafafa] px-2 py-1 text-xs text-[#71717a] sm:flex">
+    <label className="flex items-center gap-2 rounded-lg border border-[#e4e4e7] bg-[#fafafa] px-2 py-1 text-xs text-[#71717a]">
       <span>Sprint</span>
       <select
         aria-label="Sprint 切换器"
