@@ -7,6 +7,10 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/server/auth/session";
 
 const taskStatusValues = ["todo", "in_progress", "blocked", "review", "done"] as const;
+const optionalText = z.preprocess(
+  (value) => (value === null || value === "" ? undefined : value),
+  z.string().trim().optional(),
+);
 
 const createStorySchema = z.object({
   projectId: z.string().min(1),
@@ -33,18 +37,18 @@ const assignTaskSchema = taskIdSchema.extend({
 
 const updateStatusSchema = taskIdSchema.extend({
   status: z.enum(taskStatusValues),
-  progress: z.string().trim().optional(),
+  progress: optionalText,
 });
 
 const submitPrSchema = taskIdSchema.extend({
   pullRequestUrl: z.string().trim().url(),
-  branch: z.string().trim().optional(),
-  note: z.string().trim().optional(),
+  branch: optionalText,
+  note: optionalText,
 });
 
 const reviewTaskSchema = taskIdSchema.extend({
   decision: z.enum(["approve", "reject"]),
-  feedback: z.string().trim().optional(),
+  feedback: optionalText,
 });
 
 async function requireProjectAccess(projectId: string, userId: string) {
