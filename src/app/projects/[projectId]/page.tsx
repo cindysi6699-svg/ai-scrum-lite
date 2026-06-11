@@ -25,6 +25,7 @@ import {
 import { requireUser } from "@/server/auth/session";
 import { getProjectForUser } from "@/server/queries/projects";
 import { NewStoryDialog } from "./new-story-dialog";
+import { SprintSwitcher } from "./sprint-switcher";
 
 type BoardColumn = {
   key: string;
@@ -89,6 +90,12 @@ type BacklogEpicRow = {
 
 type WorkspaceView = "board" | "backlog" | "dash" | "review";
 
+type SprintOption = {
+  id: string;
+  name: string;
+  status: string;
+};
+
 const boardColumns: BoardColumn[] = [
   {
     key: "todo",
@@ -136,10 +143,40 @@ function normalizeWorkspaceView(view: string | string[] | undefined): WorkspaceV
   return "board";
 }
 
-function projectViewHref(projectId: string, view: WorkspaceView) {
-  return view === "board"
-    ? `/projects/${projectId}`
-    : `/projects/${projectId}?view=${view}`;
+function normalizeSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function selectSprint<T extends SprintOption>(
+  sprints: T[],
+  sprintParam: string | string[] | undefined,
+) {
+  const requestedSprintId = normalizeSearchParam(sprintParam);
+  const requestedSprint = requestedSprintId
+    ? sprints.find((sprint) => sprint.id === requestedSprintId)
+    : undefined;
+
+  return requestedSprint ?? sprints.find((sprint) => sprint.status === "active") ?? sprints[0];
+}
+
+function projectViewHref(
+  projectId: string,
+  view: WorkspaceView,
+  sprintId?: string,
+) {
+  const params = new URLSearchParams();
+
+  if (view !== "board") {
+    params.set("view", view);
+  }
+
+  if (sprintId) {
+    params.set("sprint", sprintId);
+  }
+
+  const query = params.toString();
+
+  return `/projects/${projectId}${query ? `?${query}` : ""}`;
 }
 
 function topNavClassName(active: boolean) {
@@ -368,7 +405,7 @@ export default async function ProjectWorkspacePage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams?: Promise<{ view?: string | string[] }>;
+  searchParams?: Promise<{ sprint?: string | string[]; view?: string | string[] }>;
 }) {
   const user = await requireUser();
   const { projectId } = await params;
@@ -380,10 +417,12 @@ export default async function ProjectWorkspacePage({
     notFound();
   }
 
-  const latestSprint = project.sprints[0];
+  const selectedSprint = selectSprint(project.sprints, query?.sprint);
+  const selectedSprintId = selectedSprint?.id;
+  const selectedSprintName = selectedSprint?.name ?? "Sprint 1";
   const epics = project.backlog.filter((item) => item.type === "epic");
   const stories = project.backlog.filter((item) => item.type === "story");
-  const sprintTasks = latestSprint?.tasks ?? [];
+  const sprintTasks = selectedSprint?.tasks ?? [];
   const aiAgents = project.members.filter((member) => member.user.type === "ai");
   const reviewTasks = sprintTasks.filter((task) => task.status === "review");
   const blockedTasks = sprintTasks.filter((task) => task.status === "blocked");
@@ -422,19 +461,19 @@ export default async function ProjectWorkspacePage({
         <nav className="flex items-center gap-1 text-sm">
           <Link
             className={topNavClassName(workspaceActive)}
-            href={projectViewHref(project.id, "board")}
+            href={projectViewHref(project.id, "board", selectedSprintId)}
           >
             工作台
           </Link>
           <Link
             className={topNavClassName(view === "dash")}
-            href={projectViewHref(project.id, "dash")}
+            href={projectViewHref(project.id, "dash", selectedSprintId)}
           >
             Sprint 仪表盘
           </Link>
           <Link
             className={topNavWithBadgeClassName(view === "review")}
-            href={projectViewHref(project.id, "review")}
+            href={projectViewHref(project.id, "review", selectedSprintId)}
           >
             验收闸门
             <span className="rounded-full bg-amber-100 px-1.5 text-[10px] text-[#b45309]">
@@ -444,6 +483,14 @@ export default async function ProjectWorkspacePage({
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
+          <SprintSwitcher
+            selectedSprintId={selectedSprintId}
+            sprints={project.sprints.map((sprint) => ({
+              id: sprint.id,
+              name: sprint.name,
+              status: sprint.status,
+            }))}
+          />
           <div className="hidden items-center gap-3 rounded-lg border border-[#e4e4e7] bg-[#fafafa] px-3 py-1.5 text-xs sm:flex">
             <span className="text-[#a1a1aa]">Agent 机群</span>
             <span className="flex items-center gap-1 text-[#3f3f46]">
@@ -469,15 +516,21 @@ export default async function ProjectWorkspacePage({
         <BoardView
           aiAgents={aiAgents}
           donePoints={donePoints}
-          latestSprintName={latestSprint?.name ?? "Sprint 1"}
           projectId={project.id}
+          selectedSprintId={selectedSprintId}
+          sprintName={selectedSprintName}
           sprintTasks={sprintTasks}
           totalPoints={totalPoints}
           userInitial={user.name?.slice(0, 1).toUpperCase() ?? "Y"}
         />
       ) : null}
       {view === "backlog" ? (
-        <BacklogView epics={epics} projectId={project.id} stories={stories} />
+        <BacklogView
+          epics={epics}
+          projectId={project.id}
+          selectedSprintId={selectedSprintId}
+          stories={stories}
+        />
       ) : null}
       {view === "dash" ? (
         <SprintDashboard
@@ -486,6 +539,7 @@ export default async function ProjectWorkspacePage({
           donePoints={donePoints}
           doneTasks={doneTasks.length}
           reviewTasks={reviewTasks.length}
+          sprintName={selectedSprintName}
           sprintTasks={sprintTasks.length}
           totalPoints={totalPoints}
         />
@@ -500,16 +554,18 @@ export default async function ProjectWorkspacePage({
 function BoardView({
   aiAgents,
   donePoints,
-  latestSprintName,
   projectId,
+  selectedSprintId,
+  sprintName,
   sprintTasks,
   totalPoints,
   userInitial,
 }: {
   aiAgents: AgentMember[];
   donePoints: number;
-  latestSprintName: string;
   projectId: string;
+  selectedSprintId?: string;
+  sprintName: string;
   sprintTasks: WorkTask[];
   totalPoints: number;
   userInitial: string;
@@ -523,13 +579,13 @@ function BoardView({
           </span>
           <Link
             className="rounded-md px-2.5 py-1 text-[#71717a] hover:text-[#18181b]"
-            href={projectViewHref(projectId, "backlog")}
+            href={projectViewHref(projectId, "backlog", selectedSprintId)}
           >
             Backlog
           </Link>
         </div>
         <h1 className="text-lg font-semibold text-[#18181b]">
-          {latestSprintName} · Walking Skeleton
+          {sprintName} · Walking Skeleton
         </h1>
         <span className="rounded-md border border-[#e4e4e7] bg-white px-2 py-0.5 text-xs text-[#71717a]">
           6.10 → 6.17 · 还剩 4 天
@@ -545,7 +601,7 @@ function BoardView({
             {donePoints} / {totalPoints} pts
           </span>
         </div>
-        <NewStoryDialog projectId={projectId} sprintName={latestSprintName} />
+        <NewStoryDialog projectId={projectId} sprintName={sprintName} />
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -601,10 +657,12 @@ function BoardView({
 function BacklogView({
   epics,
   projectId,
+  selectedSprintId,
   stories,
 }: {
   epics: BacklogItem[];
   projectId: string;
+  selectedSprintId?: string;
   stories: BacklogItem[];
 }) {
   const rows = buildBacklogRows(epics, stories);
@@ -615,7 +673,7 @@ function BacklogView({
         <div className="inline-flex rounded-lg border border-[#e4e4e7] bg-white p-0.5 text-xs">
           <Link
             className="rounded-md px-2.5 py-1 text-[#71717a] hover:text-[#18181b]"
-            href={projectViewHref(projectId, "board")}
+            href={projectViewHref(projectId, "board", selectedSprintId)}
           >
             看板
           </Link>
@@ -750,6 +808,7 @@ function SprintDashboard({
   donePoints,
   doneTasks,
   reviewTasks,
+  sprintName,
   sprintTasks,
   totalPoints,
 }: {
@@ -758,6 +817,7 @@ function SprintDashboard({
   donePoints: number;
   doneTasks: number;
   reviewTasks: number;
+  sprintName: string;
   sprintTasks: number;
   totalPoints: number;
 }) {
@@ -766,7 +826,9 @@ function SprintDashboard({
   return (
     <section className="mx-auto max-w-[1100px] px-4 py-5">
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h2 className="text-lg font-semibold text-[#18181b]">Sprint 1 仪表盘</h2>
+        <h2 className="text-lg font-semibold text-[#18181b]">
+          {sprintName} 仪表盘
+        </h2>
         <span className="rounded-md border border-[#e4e4e7] bg-white px-2 py-0.5 text-xs text-[#71717a]">
           第 3 天 / 共 7 天
         </span>

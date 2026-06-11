@@ -1,4 +1,8 @@
+import crypto from "node:crypto";
+
 import { expect, test, type Page } from "@playwright/test";
+import { config } from "dotenv";
+import pg from "pg";
 
 /**
  * Sprint 1 验收套件 —— 对照 ACCEPTANCE-SPRINT1.md 真实点击 + 断言。
@@ -8,11 +12,75 @@ import { expect, test, type Page } from "@playwright/test";
 
 const BASE = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const SESSION_TOKEN = process.env.E2E_SESSION_TOKEN ?? "e2e-playwright-session-token";
+config({ path: ".env.local" });
+config();
 
 // 串行:用例之间共享 DB 状态(指派/提 PR/验收会改变看板)
 test.describe.configure({ mode: "serial" });
 
 let projectId = "";
+
+const { Client } = pg;
+
+function normalizeDatabaseUrl(rawConnectionString: string) {
+  const url = new URL(rawConnectionString);
+  const sslMode = url.searchParams.get("sslmode");
+
+  if (sslMode === "require" || sslMode === "prefer" || sslMode === "verify-ca") {
+    url.searchParams.set("sslmode", "verify-full");
+  }
+
+  return url.toString();
+}
+
+async function ensureSwitcherSprint(projectId: string) {
+  const connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set");
+  }
+
+  const client = new Client({
+    connectionString: normalizeDatabaseUrl(connectionString),
+  });
+
+  await client.connect();
+
+  try {
+    const existing = await client.query(
+      'SELECT * FROM "Sprint" WHERE "projectId" = $1 AND "name" = $2 LIMIT 1',
+      [projectId, "Sprint 2 - Switcher E2E"],
+    );
+
+    if (existing.rows[0]) {
+      return existing.rows[0] as { id: string; name: string };
+    }
+
+    const now = new Date();
+    const created = await client.query(
+      `INSERT INTO "Sprint"
+        ("id", "projectId", "name", "goal", "status", "startDate", "endDate", "createdAt", "updatedAt")
+       VALUES
+        ($1, $2, $3, $4, $5::"SprintStatus", $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        crypto.randomUUID(),
+        projectId,
+        "Sprint 2 - Switcher E2E",
+        "E2E fixture for sprint switching only.",
+        "planning",
+        new Date("2026-06-18T00:00:00.000Z"),
+        new Date("2026-06-25T00:00:00.000Z"),
+        now,
+        now,
+      ],
+    );
+
+    return created.rows[0] as { id: string; name: string };
+  } finally {
+    await client.end();
+  }
+}
 
 test.beforeEach(async ({ context }) => {
   await context.addCookies([
@@ -55,6 +123,23 @@ test("US-1 看板加载:登录后进入 Helmsman,看板渲染 4 列 + 导航", a
   await expect(page.getByRole("link", { name: "工作台" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sprint 仪表盘" })).toBeVisible();
   await expect(page.getByRole("link", { name: /验收闸门/ })).toBeVisible();
+});
+
+test("US-8 Sprint 切换器:?sprint 渲染目标 sprint,非法 id 回退默认 active sprint", async ({ page }) => {
+  await openHelmsmanBoard(page);
+
+  const targetSprint = await ensureSwitcherSprint(projectId);
+
+  await page.goto(`${BASE}/projects/${projectId}?sprint=${targetSprint.id}`);
+  await expect(page.getByLabel("Sprint 切换器")).toHaveValue(targetSprint.id);
+  await expect(
+    page.getByRole("heading", { name: new RegExp(targetSprint.name) }),
+  ).toBeVisible();
+
+  await page.goto(`${BASE}/projects/${projectId}?sprint=not-a-real-sprint`);
+  await expect(
+    page.getByRole("heading", { name: /Sprint 1 - Walking Skeleton/ }),
+  ).toBeVisible();
 });
 
 test("US-2 指派:把一个 To Do story 指派给在线 agent → 流入「Agent 执行中」", async ({ page }) => {
