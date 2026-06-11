@@ -48,6 +48,7 @@ type AgentMember = {
 type WorkTask = {
   id: string;
   title: string;
+  acceptanceCriteria: string | null;
   status: string;
   priority: string;
   assigneeId: string | null;
@@ -157,10 +158,16 @@ function nativeControlClassName() {
   return "h-8 w-full rounded-md border border-[#e4e4e7] bg-white px-2 text-xs text-[#3f3f46] outline-none transition focus-visible:border-[#4f7cff] focus-visible:ring-2 focus-visible:ring-[#eef2ff]";
 }
 
-function priorityPoints(priority: string) {
-  const value = Number(priority.replace("P", ""));
+// Placeholder until Sprint 2 adds a real storyPoints field.
+const PRIORITY_POINTS: Record<string, number> = {
+  P0: 8,
+  P1: 5,
+  P2: 3,
+  P3: 2,
+};
 
-  return Number.isFinite(value) ? value : 1;
+function priorityPoints(priority: string) {
+  return PRIORITY_POINTS[priority] ?? 3;
 }
 
 function progressWidth(done: number, total: number) {
@@ -177,6 +184,14 @@ function pullRequestNumber(url: string | null | undefined) {
 
 function backlogCode(title: string) {
   return title.match(/^(E\d+|US-\d+)/)?.[1] ?? "";
+}
+
+function storyRef(task: {
+  id: string;
+  title: string;
+  backlogItem: { title: string } | null;
+}) {
+  return backlogCode(task.backlogItem?.title ?? task.title) || `#${task.id.slice(0, 6)}`;
 }
 
 function cleanBacklogTitle(title: string) {
@@ -564,14 +579,13 @@ function BoardView({
                     暂无卡片
                   </div>
                 ) : (
-                  columnTasks.map((task, index) => (
+                  columnTasks.map((task) => (
                     <TaskCard
                       agents={aiAgents}
                       key={task.id}
                       projectId={projectId}
                       task={task}
                       userInitial={userInitial}
-                      usLabel={`US-${index + 1}`}
                     />
                   ))
                 )}
@@ -898,6 +912,10 @@ function ReviewGate({
   reviewTasks: WorkTask[];
 }) {
   const selectedTask = reviewTasks[0];
+  const selectedCriteria = (selectedTask?.acceptanceCriteria ?? "")
+    .split("\n")
+    .map((criterion) => criterion.trim())
+    .filter(Boolean);
 
   return (
     <section>
@@ -926,7 +944,7 @@ function ReviewGate({
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-[11px] text-[#a1a1aa]">
-                      US-{index + 1} · PR #{pullRequestNumber(task.githubRefs[0]?.pullRequestUrl) || index + 1}
+                      {storyRef(task)} · PR #{pullRequestNumber(task.githubRefs[0]?.pullRequestUrl) || index + 1}
                     </span>
                     <span className="font-mono text-[10px] text-[#a1a1aa]">
                       {index === 0 ? "now" : `${index * 8}m`}
@@ -950,7 +968,7 @@ function ReviewGate({
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-semibold text-[#18181b]">
-                      US-4 {selectedTask.title}
+                      {storyRef(selectedTask)} {selectedTask.title}
                     </h2>
                     <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] text-[#b45309]">
                       待验收
@@ -973,9 +991,15 @@ function ReviewGate({
                       验收标准(Gherkin)
                     </h3>
                     <ul className="space-y-1.5 text-sm">
-                      <AcceptanceItem checked text="验收通过后,PR 才允许合并/push" />
-                      <AcceptanceItem checked text="打回时 PR 被阻止 + story 退回带反馈" />
-                      <AcceptanceItem text="绕过门禁直接调 merge API 必须失败 — 待你确认" />
+                      {selectedCriteria.length > 0 ? (
+                        selectedCriteria.map((criterion) => (
+                          <AcceptanceItem key={criterion} text={criterion} />
+                        ))
+                      ) : (
+                        <li className="text-[#a1a1aa]">
+                          该 story 未填写验收标准。
+                        </li>
+                      )}
                     </ul>
                   </div>
 
@@ -1092,13 +1116,11 @@ function TaskCard({
   projectId,
   task,
   userInitial,
-  usLabel,
 }: {
   agents: AgentMember[];
   projectId: string;
   task: WorkTask;
   userInitial: string;
-  usLabel: string;
 }) {
   const isTodo = task.status === "todo";
   const isRunning = task.status === "in_progress";
@@ -1107,6 +1129,7 @@ function TaskCard({
   const isDone = task.status === "accepted" || task.status === "done";
   const latestPr = task.githubRefs[0];
   const latestUpdate = task.updates[0];
+  const taskRef = storyRef(task);
 
   return (
     <article
@@ -1117,7 +1140,7 @@ function TaskCard({
       }`}
     >
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-mono text-[11px] text-[#a1a1aa]">{usLabel}</span>
+        <span className="font-mono text-[11px] text-[#a1a1aa]">{taskRef}</span>
         {isTodo ? (
           <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-[#71717a]">
             {priorityPoints(task.priority)} pts
