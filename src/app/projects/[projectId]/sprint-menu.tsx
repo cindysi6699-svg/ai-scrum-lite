@@ -202,6 +202,7 @@ export function SprintMenu({
 
   return (
     <Dialog
+      disablePointerDismissal
       onOpenChange={(open) => {
         setDialogOpen(open);
 
@@ -262,10 +263,10 @@ export function SprintMenu({
       </DropdownMenu>
 
       <DialogContent
-        className="max-w-[560px] overflow-hidden rounded-2xl border border-[#e4e4e7] bg-white shadow-[0_24px_60px_-12px_rgba(16,24,40,.28)]"
+        className="flex max-h-[calc(100dvh-32px)] max-w-[560px] flex-col overflow-hidden rounded-2xl border border-[#e4e4e7] bg-white shadow-[0_24px_60px_-12px_rgba(16,24,40,.28)]"
         showCloseButton={false}
       >
-        <div className="flex items-center justify-between border-b border-[#e4e4e7] px-5 py-3.5">
+        <div className="shrink-0 flex items-center justify-between border-b border-[#e4e4e7] px-5 py-3.5">
           <div className="flex items-center gap-2">
             <span className="grid h-6 w-6 place-items-center rounded-md bg-[#eef2ff] text-[#3a5bd0]">
               <Download className="size-3.5" strokeWidth={2} />
@@ -277,7 +278,7 @@ export function SprintMenu({
           </DialogClose>
         </div>
 
-        <div className="space-y-3 px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           <div className="flex items-center justify-between">
             <div className="inline-flex rounded-lg border border-[#e4e4e7] bg-white p-0.5 text-xs">
               <button
@@ -323,7 +324,7 @@ export function SprintMenu({
           </div>
 
           <Textarea
-            className="min-h-[200px] resize-y rounded-lg border-[#e4e4e7] bg-white px-3 py-2.5 font-mono text-xs leading-relaxed text-[#18181b] placeholder:text-[#a1a1aa] focus-visible:border-[#4f7cff] focus-visible:ring-[#4f7cff]/15"
+            className="h-[min(42dvh,360px)] min-h-[200px] resize-none overflow-y-auto rounded-lg border-[#e4e4e7] bg-white px-3 py-2.5 font-mono text-xs leading-relaxed text-[#18181b] placeholder:text-[#a1a1aa] focus-visible:border-[#4f7cff] focus-visible:ring-[#4f7cff]/15"
             onChange={(event) => {
               setServerErrors([]);
               setSpecJson(event.target.value);
@@ -361,7 +362,7 @@ export function SprintMenu({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-[#e4e4e7] bg-[#fafafa] px-5 py-3">
+        <div className="shrink-0 flex items-center justify-end gap-2 border-t border-[#e4e4e7] bg-[#fafafa] px-5 py-3">
           <DialogClose className="rounded-lg px-3.5 py-2 text-sm text-[#71717a] hover:bg-zinc-100">
             取消
           </DialogClose>
