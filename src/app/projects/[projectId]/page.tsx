@@ -1,4 +1,5 @@
 import {
+  Archive,
   Bot,
   Check,
   ChevronRight,
@@ -20,12 +21,15 @@ import {
   assignTaskAction,
   reviewTaskAction,
   submitPullRequestAction,
+  updateSprintLifecycleAction,
   updateTaskStatusAction,
 } from "@/server/actions/tasks";
 import { requireUser } from "@/server/auth/session";
 import { getProjectForUser } from "@/server/queries/projects";
 import { NewStoryDialog } from "./new-story-dialog";
+import { BoardDragController } from "./board-drag-controller";
 import { SprintMenu } from "./sprint-menu";
+import { StoryDetailDrawer, type StoryDetailTask } from "./story-detail-drawer";
 
 type BoardColumn = {
   key: string;
@@ -49,14 +53,40 @@ type AgentMember = {
 type WorkTask = {
   id: string;
   title: string;
+  description: string | null;
+  userStory: string | null;
   acceptanceCriteria: string | null;
   status: string;
   priority: string;
   assigneeId: string | null;
   assignee: { name: string | null } | null;
   backlogItem: { id: string; title: string } | null;
-  githubRefs: Array<{ pullRequestUrl: string | null; branch: string | null }>;
-  updates: Array<{ progress: string }>;
+  createdAt: Date;
+  updatedAt: Date;
+  githubRefs: Array<{
+    id: string;
+    pullRequestUrl: string | null;
+    branch: string | null;
+    checksStatus: string | null;
+    note: string | null;
+    createdAt: Date;
+  }>;
+  updates: Array<{
+    id: string;
+    progress: string;
+    previousStatus: string | null;
+    newStatus: string | null;
+    createdAt: Date;
+    actor: { name: string | null } | null;
+  }>;
+  decisions: Array<{
+    id: string;
+    title: string;
+    decision: string;
+    reason: string | null;
+    createdAt: Date;
+    madeBy: { name: string | null } | null;
+  }>;
 };
 
 type BacklogItem = {
@@ -88,12 +118,16 @@ type BacklogEpicRow = {
   defaultOpen?: boolean;
 };
 
-type WorkspaceView = "board" | "backlog" | "dash" | "review";
+type WorkspaceView = "board" | "backlog" | "dash" | "review" | "agents" | "sprints";
 
 type SprintOption = {
   id: string;
   name: string;
   status: string;
+  goal?: string | null;
+  startDate?: Date | null;
+  endDate?: Date | null;
+  tasks?: WorkTask[];
 };
 
 const boardColumns: BoardColumn[] = [
@@ -136,7 +170,13 @@ const agentStatuses = ["in_progress", "blocked", "review"];
 function normalizeWorkspaceView(view: string | string[] | undefined): WorkspaceView {
   const value = Array.isArray(view) ? view[0] : view;
 
-  if (value === "backlog" || value === "dash" || value === "review") {
+  if (
+    value === "backlog" ||
+    value === "dash" ||
+    value === "review" ||
+    value === "agents" ||
+    value === "sprints"
+  ) {
     return value;
   }
 
@@ -163,6 +203,7 @@ function projectViewHref(
   projectId: string,
   view: WorkspaceView,
   sprintId?: string,
+  extras?: Record<string, string | undefined>,
 ) {
   const params = new URLSearchParams();
 
@@ -174,9 +215,23 @@ function projectViewHref(
     params.set("sprint", sprintId);
   }
 
+  for (const [key, value] of Object.entries(extras ?? {})) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
   const query = params.toString();
 
   return `/projects/${projectId}${query ? `?${query}` : ""}`;
+}
+
+function closeTaskDetailHref(
+  projectId: string,
+  view: WorkspaceView,
+  sprintId?: string,
+) {
+  return projectViewHref(projectId, view, sprintId);
 }
 
 function topNavClassName(active: boolean) {
@@ -233,6 +288,154 @@ function storyRef(task: {
 
 function cleanBacklogTitle(title: string) {
   return title.replace(/^(E\d+|US-\d+)\s+/, "");
+}
+
+function toStoryDetailTask(task: WorkTask): StoryDetailTask {
+  return {
+    id: task.id,
+    ref: storyRef(task),
+    title: task.title,
+    userStory: task.userStory ?? task.description,
+    acceptanceCriteria: task.acceptanceCriteria,
+    priority: task.priority,
+    status: task.status,
+    assigneeName: task.assignee?.name ?? null,
+    updates: task.updates.map((update) => ({
+      id: update.id,
+      actorName: update.actor?.name ?? null,
+      previousStatus: update.previousStatus,
+      newStatus: update.newStatus,
+      progress: update.progress,
+      createdAt: update.createdAt.toISOString(),
+    })),
+    githubRefs: task.githubRefs.map((ref) => ({
+      id: ref.id,
+      branch: ref.branch,
+      pullRequestUrl: ref.pullRequestUrl,
+      checksStatus: ref.checksStatus,
+      note: ref.note,
+      createdAt: ref.createdAt.toISOString(),
+    })),
+    decisions: task.decisions.map((decision) => ({
+      id: decision.id,
+      title: decision.title,
+      decision: decision.decision,
+      reason: decision.reason,
+      madeByName: decision.madeBy?.name ?? null,
+      createdAt: decision.createdAt.toISOString(),
+    })),
+  };
+}
+
+function sprintDateRange(sprint: SprintOption | undefined) {
+  if (!sprint?.startDate || !sprint.endDate) {
+    return "未设定周期";
+  }
+
+  const formatter = new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+  });
+
+  return `${formatter.format(sprint.startDate)} → ${formatter.format(sprint.endDate)}`;
+}
+
+function sprintStatusLabel(status: string) {
+  if (status === "active") {
+    return "进行";
+  }
+
+  if (status === "closed") {
+    return "关闭";
+  }
+
+  if (status === "cancelled") {
+    return "归档";
+  }
+
+  return "规划";
+}
+
+function sprintStatusClassName(status: string) {
+  if (status === "active") {
+    return "bg-emerald-100 text-[#047857]";
+  }
+
+  if (status === "closed") {
+    return "bg-zinc-100 text-[#71717a]";
+  }
+
+  if (status === "cancelled") {
+    return "bg-rose-100 text-[#be123c]";
+  }
+
+  return "bg-[#eef2ff] text-[#3a5bd0]";
+}
+
+function shortTime(value: Date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
+}
+
+type AgentSummary = {
+  id: string;
+  name: string;
+  status: "执行" | "空闲" | "异常";
+  currentStory: string;
+  claimed: number;
+  pullRequests: number;
+  rejected: number;
+  updates: Array<WorkTask["updates"][number] & { taskTitle: string; taskRef: string }>;
+};
+
+function buildAgentSummaries(agents: AgentMember[], tasks: WorkTask[]) {
+  return agents.map((agent) => {
+    const assignedTasks = tasks.filter((task) => task.assigneeId === agent.userId);
+    const currentTask =
+      assignedTasks.find((task) => task.status === "blocked") ??
+      assignedTasks.find((task) => agentStatuses.includes(task.status)) ??
+      assignedTasks[0];
+    const updates = assignedTasks
+      .flatMap((task) =>
+        task.updates
+          .filter((update) => update.actor?.name === agent.user.name || task.assigneeId === agent.userId)
+          .map((update) => ({
+            ...update,
+            taskTitle: task.title,
+            taskRef: storyRef(task),
+          })),
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const rejected = assignedTasks.reduce(
+      (sum, task) =>
+        sum +
+        task.decisions.filter((decision) =>
+          decision.decision.toLowerCase().includes("reject"),
+        ).length,
+      0,
+    );
+    const status = assignedTasks.some((task) => task.status === "blocked")
+      ? "异常"
+      : assignedTasks.some((task) => agentStatuses.includes(task.status))
+        ? "执行"
+        : "空闲";
+
+    return {
+      id: agent.userId,
+      name: agent.displayName ?? agent.user.name ?? "AI agent",
+      status,
+      currentStory: currentTask ? `${storyRef(currentTask)} ${currentTask.title}` : "未领取",
+      claimed: assignedTasks.length,
+      pullRequests: assignedTasks.reduce(
+        (sum, task) => sum + task.githubRefs.length,
+        0,
+      ),
+      rejected,
+      updates,
+    } satisfies AgentSummary;
+  });
 }
 
 function storyStatusClassName(status: BacklogStoryRow["status"]) {
@@ -405,7 +608,12 @@ export default async function ProjectWorkspacePage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams?: Promise<{ sprint?: string | string[]; view?: string | string[] }>;
+  searchParams?: Promise<{
+    agent?: string | string[];
+    sprint?: string | string[];
+    task?: string | string[];
+    view?: string | string[];
+  }>;
 }) {
   const user = await requireUser();
   const { projectId } = await params;
@@ -420,10 +628,15 @@ export default async function ProjectWorkspacePage({
   const selectedSprint = selectSprint(project.sprints, query?.sprint);
   const selectedSprintId = selectedSprint?.id;
   const selectedSprintName = selectedSprint?.name ?? "Sprint 1";
+  const selectedTaskId = normalizeSearchParam(query?.task);
+  const selectedAgentId = normalizeSearchParam(query?.agent);
   const epics = project.backlog.filter((item) => item.type === "epic");
   const stories = project.backlog.filter((item) => item.type === "story");
   const sprintTasks = selectedSprint?.tasks ?? [];
+  const selectedDetailTask =
+    sprintTasks.find((task) => task.id === selectedTaskId) ?? null;
   const aiAgents = project.members.filter((member) => member.user.type === "ai");
+  const agentSummaries = buildAgentSummaries(aiAgents, sprintTasks);
   const reviewTasks = sprintTasks.filter((task) => task.status === "review");
   const blockedTasks = sprintTasks.filter((task) => task.status === "blocked");
   const activeAgents = aiAgents.filter((agent) =>
@@ -480,6 +693,12 @@ export default async function ProjectWorkspacePage({
               {reviewTasks.length}
             </span>
           </Link>
+          <Link
+            className={topNavClassName(view === "sprints")}
+            href={projectViewHref(project.id, "sprints", selectedSprintId)}
+          >
+            Sprints
+          </Link>
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
@@ -493,7 +712,10 @@ export default async function ProjectWorkspacePage({
               status: sprint.status,
             }))}
           />
-          <div className="hidden items-center gap-3 rounded-lg border border-[#e4e4e7] bg-[#fafafa] px-3 py-1.5 text-xs sm:flex">
+          <Link
+            className="hidden items-center gap-3 rounded-lg border border-[#e4e4e7] bg-[#fafafa] px-3 py-1.5 text-xs hover:border-[#4f7cff] sm:flex"
+            href={projectViewHref(project.id, "agents", selectedSprintId)}
+          >
             <span className="text-[#a1a1aa]">Agent 机群</span>
             <span className="flex items-center gap-1 text-[#3f3f46]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#4f7cff]" />
@@ -507,7 +729,7 @@ export default async function ProjectWorkspacePage({
               <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
               {blockedTasks.length} 异常
             </span>
-          </div>
+          </Link>
           <div className="grid h-7 w-7 place-items-center rounded-full bg-zinc-200 text-xs font-medium text-[#3f3f46]">
             {user.name?.slice(0, 1).toUpperCase() ?? "Y"}
           </div>
@@ -518,8 +740,10 @@ export default async function ProjectWorkspacePage({
         <BoardView
           aiAgents={aiAgents}
           donePoints={donePoints}
+          view={view}
           projectId={project.id}
           selectedSprintId={selectedSprintId}
+          selectedSprint={selectedSprint}
           sprintName={selectedSprintName}
           sprintTasks={sprintTasks}
           totalPoints={totalPoints}
@@ -531,7 +755,9 @@ export default async function ProjectWorkspacePage({
           epics={epics}
           projectId={project.id}
           selectedSprintId={selectedSprintId}
+          view={view}
           stories={stories}
+          sprintTasks={sprintTasks}
         />
       ) : null}
       {view === "dash" ? (
@@ -549,6 +775,26 @@ export default async function ProjectWorkspacePage({
       {view === "review" ? (
         <ReviewGate projectId={project.id} reviewTasks={reviewTasks} />
       ) : null}
+      {view === "agents" ? (
+        <AgentObservability
+          agentSummaries={agentSummaries}
+          projectId={project.id}
+          selectedAgentId={selectedAgentId}
+          selectedSprintId={selectedSprintId}
+          sprintName={selectedSprintName}
+        />
+      ) : null}
+      {view === "sprints" ? (
+        <SprintsPage
+          projectId={project.id}
+          selectedSprintId={selectedSprintId}
+          sprints={project.sprints}
+        />
+      ) : null}
+      <StoryDetailDrawer
+        closeHref={closeTaskDetailHref(project.id, view, selectedSprintId)}
+        task={selectedDetailTask ? toStoryDetailTask(selectedDetailTask) : null}
+      />
     </main>
   );
 }
@@ -556,7 +802,9 @@ export default async function ProjectWorkspacePage({
 function BoardView({
   aiAgents,
   donePoints,
+  view,
   projectId,
+  selectedSprint,
   selectedSprintId,
   sprintName,
   sprintTasks,
@@ -565,7 +813,9 @@ function BoardView({
 }: {
   aiAgents: AgentMember[];
   donePoints: number;
+  view: WorkspaceView;
   projectId: string;
+  selectedSprint?: SprintOption;
   selectedSprintId?: string;
   sprintName: string;
   sprintTasks: WorkTask[];
@@ -574,6 +824,7 @@ function BoardView({
 }) {
   return (
     <section className="px-4 py-4">
+      <BoardDragController projectId={projectId} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-lg border border-[#e4e4e7] bg-white p-0.5 text-xs">
           <span className="rounded-md bg-[#4f7cff] px-2.5 py-1 font-medium text-white">
@@ -590,7 +841,7 @@ function BoardView({
           {sprintName} · Walking Skeleton
         </h1>
         <span className="rounded-md border border-[#e4e4e7] bg-white px-2 py-0.5 text-xs text-[#71717a]">
-          6.10 → 6.17 · 还剩 4 天
+          {sprintDateRange(selectedSprint)}
         </span>
         <div className="flex items-center gap-2 text-xs text-[#71717a]">
           <div className="h-1.5 w-40 overflow-hidden rounded-full bg-zinc-200">
@@ -614,7 +865,9 @@ function BoardView({
 
           return (
             <section
-              className={`flex flex-col rounded-xl border ${column.panelClass}`}
+              className={`flex flex-col rounded-xl border ${column.panelClass} data-[drag-over=true]:ring-2 data-[drag-over=true]:ring-[#4f7cff]/40`}
+              data-board-column
+              data-column-key={column.key}
               key={column.key}
             >
               <div className="flex items-center justify-between px-3 py-2.5">
@@ -642,7 +895,9 @@ function BoardView({
                       agents={aiAgents}
                       key={task.id}
                       projectId={projectId}
+                      selectedSprintId={selectedSprintId}
                       task={task}
+                      view={view}
                       userInitial={userInitial}
                     />
                   ))
@@ -661,13 +916,22 @@ function BacklogView({
   projectId,
   selectedSprintId,
   stories,
+  sprintTasks,
+  view,
 }: {
   epics: BacklogItem[];
   projectId: string;
   selectedSprintId?: string;
   stories: BacklogItem[];
+  sprintTasks: WorkTask[];
+  view: WorkspaceView;
 }) {
   const rows = buildBacklogRows(epics, stories);
+  const taskByStoryCode = new Map(
+    sprintTasks
+      .map((task) => [storyRef(task), task] as const)
+      .filter(([code]) => code.startsWith("US-")),
+  );
 
   return (
     <section className="mx-auto max-w-[1100px] px-4 py-5">
@@ -770,8 +1034,11 @@ function BacklogView({
                 {epic.stories.length > 0 ? (
                   <div className="divide-y divide-[#e4e4e7] border-t border-[#e4e4e7]">
                     {epic.stories.map((story) => (
-                    <div
+                    <Link
                       className="flex items-center gap-3 px-4 py-2.5 pl-11 text-sm"
+                      href={projectViewHref(projectId, view, selectedSprintId, {
+                        task: taskByStoryCode.get(story.code)?.id,
+                      })}
                       key={`${epic.code}-${story.code}`}
                     >
                       <span className="font-mono text-[11px] text-[#a1a1aa]">
@@ -787,7 +1054,7 @@ function BacklogView({
                       <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-[#71717a]">
                         {story.points}
                       </span>
-                    </div>
+                    </Link>
                     ))}
                   </div>
                 ) : (
@@ -944,6 +1211,237 @@ function KpiCard({
       </p>
       <p className={`mt-1 text-[11px] ${helperClass}`}>{helper}</p>
     </div>
+  );
+}
+
+function AgentObservability({
+  agentSummaries,
+  projectId,
+  selectedAgentId,
+  selectedSprintId,
+  sprintName,
+}: {
+  agentSummaries: AgentSummary[];
+  projectId: string;
+  selectedAgentId?: string;
+  selectedSprintId?: string;
+  sprintName: string;
+}) {
+  const selectedAgent =
+    agentSummaries.find((agent) => agent.id === selectedAgentId) ??
+    agentSummaries[0];
+  const allUpdates = agentSummaries
+    .flatMap((agent) => agent.updates.map((update) => ({ ...update, agentName: agent.name })))
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const visibleUpdates = selectedAgent?.updates ?? allUpdates;
+
+  return (
+    <section className="mx-auto max-w-[1180px] px-4 py-5">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div>
+          <p className="text-xs text-[#71717a]">Agent Observability</p>
+          <h2 className="text-lg font-semibold text-[#18181b]">
+            Agent 机群 · {sprintName}
+          </h2>
+        </div>
+        <Link
+          className="ml-auto rounded-lg border border-[#e4e4e7] bg-white px-3 py-1.5 text-sm text-[#3f3f46] hover:border-[#4f7cff]"
+          href={projectViewHref(projectId, "board", selectedSprintId)}
+        >
+          返回看板
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_320px]">
+        <div className="shadow-card overflow-hidden rounded-xl border border-[#e4e4e7] bg-white">
+          <div className="grid grid-cols-[140px_1fr_80px_80px_80px] gap-3 border-b border-[#e4e4e7] bg-[#fafafa] px-4 py-2 text-xs font-medium text-[#71717a]">
+            <span>Agent</span>
+            <span>当前 Story</span>
+            <span>领取</span>
+            <span>提 PR</span>
+            <span>打回</span>
+          </div>
+          <div className="divide-y divide-[#e4e4e7]">
+            {agentSummaries.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-[#a1a1aa]">
+                暂无 Agent 成员。
+              </div>
+            ) : (
+              agentSummaries.map((agent) => (
+                <Link
+                  className={`grid grid-cols-[140px_1fr_80px_80px_80px] gap-3 px-4 py-3 text-sm hover:bg-[#fafafa] ${
+                    selectedAgent?.id === agent.id ? "bg-[#eef2ff]" : ""
+                  }`}
+                  href={projectViewHref(projectId, "agents", selectedSprintId, {
+                    agent: agent.id,
+                  })}
+                  key={agent.id}
+                >
+                  <span
+                    className={`flex items-center gap-2 font-medium ${
+                      agent.status === "异常"
+                        ? "text-[#be123c]"
+                        : agent.status === "执行"
+                          ? "text-[#3a5bd0]"
+                          : "text-[#71717a]"
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        agent.status === "异常"
+                          ? "bg-rose-500"
+                          : agent.status === "执行"
+                            ? "bg-[#4f7cff]"
+                            : "bg-[#a1a1aa]"
+                      }`}
+                    />
+                    {agent.name}
+                  </span>
+                  <span className="truncate text-[#3f3f46]">{agent.currentStory}</span>
+                  <span className="font-mono text-[#71717a]">{agent.claimed}</span>
+                  <span className="font-mono text-[#71717a]">{agent.pullRequests}</span>
+                  <span className={agent.rejected ? "font-mono text-[#be123c]" : "font-mono text-[#71717a]"}>
+                    {agent.rejected}
+                  </span>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+
+        <aside className="shadow-card rounded-xl border border-[#e4e4e7] bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[#18181b]">活动流</h3>
+            <span className="text-xs text-[#a1a1aa]">
+              {selectedAgent?.name ?? "全部"}
+            </span>
+          </div>
+          <ol className="relative space-y-3 border-l border-[#e4e4e7] pl-4">
+            {visibleUpdates.length === 0 ? (
+              <li className="text-sm text-[#a1a1aa]">暂无活动。</li>
+            ) : (
+              visibleUpdates.slice(0, 12).map((update) => (
+                <li className="text-xs" key={update.id}>
+                  <span className="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-[#4f7cff]" />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[#a1a1aa]">
+                      {update.taskRef}
+                    </span>
+                    <span className="font-mono text-[10px] text-[#a1a1aa]">
+                      {shortTime(update.createdAt)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[#3f3f46]">{update.progress}</p>
+                </li>
+              ))
+            )}
+          </ol>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function SprintsPage({
+  projectId,
+  selectedSprintId,
+  sprints,
+}: {
+  projectId: string;
+  selectedSprintId?: string;
+  sprints: SprintOption[];
+}) {
+  return (
+    <section className="mx-auto max-w-[1000px] px-4 py-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-[#71717a]">Helmsman · Sprints</p>
+          <h2 className="text-lg font-semibold text-[#18181b]">Sprint 生命周期</h2>
+        </div>
+        <Link
+          className="rounded-lg border border-[#e4e4e7] bg-white px-3 py-1.5 text-sm text-[#3f3f46] hover:border-[#4f7cff]"
+          href={projectViewHref(projectId, "board", selectedSprintId)}
+        >
+          返回工作台
+        </Link>
+      </div>
+
+      <div className="space-y-3">
+        {sprints.map((sprint) => {
+          const tasks = sprint.tasks ?? [];
+          const done = tasks.filter(
+            (task) => task.status === "accepted" || task.status === "done",
+          ).length;
+          const progress = progressWidth(done, tasks.length);
+
+          return (
+            <article
+              className="shadow-card rounded-xl border border-[#e4e4e7] bg-white p-4"
+              key={sprint.id}
+            >
+              <div className="flex flex-wrap items-start gap-3">
+                <Link
+                  className="min-w-0 flex-1"
+                  href={projectViewHref(projectId, "board", sprint.id)}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-[#18181b]">
+                      {sprint.name}
+                    </h3>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] ${sprintStatusClassName(sprint.status)}`}>
+                      {sprintStatusLabel(sprint.status)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-[#71717a]">
+                    {sprint.goal ?? "未填写目标"}
+                  </p>
+                  <p className="mt-2 text-xs text-[#a1a1aa]">
+                    {sprintDateRange(sprint)} · {done}/{tasks.length} 完成
+                  </p>
+                </Link>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {sprint.status !== "active" ? (
+                    <form action={updateSprintLifecycleAction}>
+                      <input name="projectId" type="hidden" value={projectId} />
+                      <input name="sprintId" type="hidden" value={sprint.id} />
+                      <input name="intent" type="hidden" value="activate" />
+                      <Button className="h-8 bg-[#4f7cff] text-xs hover:bg-[#3a5bd0]" type="submit">
+                        激活
+                      </Button>
+                    </form>
+                  ) : (
+                    <form action={updateSprintLifecycleAction}>
+                      <input name="projectId" type="hidden" value={projectId} />
+                      <input name="sprintId" type="hidden" value={sprint.id} />
+                      <input name="intent" type="hidden" value="close" />
+                      <Button className="h-8 text-xs" type="submit" variant="outline">
+                        关闭
+                      </Button>
+                    </form>
+                  )}
+                  {sprint.status !== "cancelled" ? (
+                    <form action={updateSprintLifecycleAction}>
+                      <input name="projectId" type="hidden" value={projectId} />
+                      <input name="sprintId" type="hidden" value={sprint.id} />
+                      <input name="intent" type="hidden" value="archive" />
+                      <Button className="h-8 border-rose-200 text-xs text-[#be123c] hover:bg-rose-50" type="submit" variant="outline">
+                        <Archive className="size-3" strokeWidth={2} />
+                        归档
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100">
+                <div className="h-full bg-[#4f7cff]" style={{ width: progress }} />
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -1178,12 +1676,16 @@ function ReviewLog({
 function TaskCard({
   agents,
   projectId,
+  selectedSprintId,
   task,
+  view,
   userInitial,
 }: {
   agents: AgentMember[];
   projectId: string;
+  selectedSprintId?: string;
   task: WorkTask;
+  view: WorkspaceView;
   userInitial: string;
 }) {
   const isTodo = task.status === "todo";
@@ -1202,9 +1704,18 @@ function TaskCard({
       } ${isBlocked ? "border-rose-300" : ""} ${
         isReview ? "cursor-pointer border-amber-300 hover:border-amber-400" : ""
       }`}
+      data-task-card
+      data-task-id={task.id}
+      data-task-status={task.status}
+      draggable
     >
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-mono text-[11px] text-[#a1a1aa]">{taskRef}</span>
+        <Link
+          className="font-mono text-[11px] text-[#a1a1aa] hover:text-[#4f7cff]"
+          href={projectViewHref(projectId, view, selectedSprintId, { task: task.id })}
+        >
+          {taskRef}
+        </Link>
         {isTodo ? (
           <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-[#71717a]">
             {priorityPoints(task.priority)} pts
@@ -1242,7 +1753,12 @@ function TaskCard({
             : "text-[#18181b]"
         }`}
       >
-        {task.title}
+        <Link
+          className="hover:text-[#4f7cff]"
+          href={projectViewHref(projectId, view, selectedSprintId, { task: task.id })}
+        >
+          {task.title}
+        </Link>
       </p>
 
       {isTodo ? (

@@ -174,6 +174,7 @@ export function SprintMenu({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [source, setSource] = useState<"paste" | "upload">("paste");
   const [specJson, setSpecJson] = useState("");
   const [serverErrors, setServerErrors] = useState<Array<{ path: string; message: string }>>([]);
@@ -212,8 +213,11 @@ export function SprintMenu({
       }}
       open={dialogOpen}
     >
-      <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-[#e4e4e7] bg-white px-3 py-1.5 text-sm text-[#3f3f46]">
+      <DropdownMenu onOpenChange={setMenuOpen} open={menuOpen}>
+        <DropdownMenuTrigger
+          className="flex items-center gap-2 rounded-lg border border-[#e4e4e7] bg-white px-3 py-1.5 text-sm text-[#3f3f46]"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
           <span className="text-[#a1a1aa]">Sprint</span>
           <span className="max-w-52 truncate font-medium text-[#18181b]">
             {selectedSprintName}
@@ -230,7 +234,10 @@ export function SprintMenu({
               <DropdownMenuItem
                 className={current ? "bg-[#fafafa]" : ""}
                 key={sprint.id}
-                onClick={() => goToSprint(sprint.id)}
+                onClick={() => {
+                  setMenuOpen(false);
+                  goToSprint(sprint.id);
+                }}
               >
                 {current ? (
                   <Check className="size-3.5 text-[#4f7cff]" strokeWidth={2.5} />
@@ -254,7 +261,10 @@ export function SprintMenu({
           <DropdownMenuItem
             className="text-[#3a5bd0] hover:bg-[#eef2ff] data-[highlighted]:bg-[#eef2ff]"
             closeOnClick={false}
-            onClick={() => setDialogOpen(true)}
+            onClick={() => {
+              setMenuOpen(false);
+              setDialogOpen(true);
+            }}
           >
             <Plus className="size-3.5" strokeWidth={2} />
             导入 / 新建 Sprint

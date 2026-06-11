@@ -84,10 +84,13 @@ export async function getProjectForUser(projectId: string, userId: string) {
               assignee: true,
               backlogItem: true,
               githubRefs: {
+                include: {
+                  createdBy: true,
+                },
                 orderBy: {
                   createdAt: "desc",
                 },
-                take: 1,
+                take: 5,
               },
               updates: {
                 include: {
@@ -96,7 +99,16 @@ export async function getProjectForUser(projectId: string, userId: string) {
                 orderBy: {
                   createdAt: "desc",
                 },
-                take: 2,
+                take: 20,
+              },
+              decisions: {
+                include: {
+                  madeBy: true,
+                },
+                orderBy: {
+                  createdAt: "desc",
+                },
+                take: 10,
               },
             },
             orderBy: {
@@ -107,7 +119,6 @@ export async function getProjectForUser(projectId: string, userId: string) {
         orderBy: {
           updatedAt: "desc",
         },
-        take: 5,
       },
       backlog: {
         orderBy: [

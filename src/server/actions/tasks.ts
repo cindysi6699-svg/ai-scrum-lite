@@ -6,8 +6,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/server/auth/session";
 import { parseSprintSpecJson, type SprintSpecFieldError } from "./import-sprint-spec";
+import {
+  taskStatusMoveError,
+  taskStatusValues,
+  type TaskStatusValue,
+} from "./task-status-rules";
 
-const taskStatusValues = ["todo", "in_progress", "blocked", "review", "done"] as const;
 const optionalText = z.preprocess(
   (value) => (value === null || value === "" ? undefined : value),
   z.string().trim().optional(),
@@ -50,6 +54,16 @@ const submitPrSchema = taskIdSchema.extend({
 const reviewTaskSchema = taskIdSchema.extend({
   decision: z.enum(["approve", "reject"]),
   feedback: optionalText,
+});
+
+const moveTaskStatusSchema = taskIdSchema.extend({
+  status: z.enum(taskStatusValues),
+});
+
+const sprintLifecycleSchema = z.object({
+  projectId: z.string().min(1),
+  sprintId: z.string().min(1),
+  intent: z.enum(["activate", "close", "archive"]),
 });
 
 type ImportSprintResult =
@@ -394,8 +408,13 @@ export async function updateTaskStatusAction(formData: FormData) {
   await requireProjectAccess(parsed.projectId, user.id);
   const task = await getTaskForProject(parsed.taskId, parsed.projectId);
 
-  if (parsed.status === "done" && task.status !== "review") {
-    throw new Error("Tasks can only move to done from review.");
+  const moveError = taskStatusMoveError(
+    task.status as TaskStatusValue,
+    parsed.status,
+  );
+
+  if (moveError) {
+    throw new Error(moveError);
   }
 
   await prisma.$transaction([
@@ -419,6 +438,115 @@ export async function updateTaskStatusAction(formData: FormData) {
       },
     }),
   ]);
+
+  revalidateProject(parsed.projectId);
+}
+
+export async function moveTaskStatusAction(input: {
+  projectId: string;
+  taskId: string;
+  status: TaskStatusValue;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const user = await requireUser();
+  const parsed = moveTaskStatusSchema.parse(input);
+
+  await requireProjectAccess(parsed.projectId, user.id);
+  const task = await getTaskForProject(parsed.taskId, parsed.projectId);
+  const moveError = taskStatusMoveError(
+    task.status as TaskStatusValue,
+    parsed.status,
+  );
+
+  if (moveError) {
+    return {
+      ok: false,
+      message: moveError,
+    };
+  }
+
+  await prisma.$transaction([
+    prisma.task.update({
+      where: {
+        id: task.id,
+      },
+      data: {
+        status: parsed.status,
+        startedAt:
+          parsed.status === "in_progress" ? (task.startedAt ?? new Date()) : task.startedAt,
+        completedAt:
+          parsed.status === "done" || parsed.status === "accepted"
+            ? new Date()
+            : task.completedAt,
+        acceptedAt: parsed.status === "accepted" ? new Date() : task.acceptedAt,
+      },
+    }),
+    prisma.taskUpdate.create({
+      data: {
+        taskId: task.id,
+        actorId: user.id,
+        previousStatus: task.status,
+        newStatus: parsed.status,
+        progress: `Dragged from ${task.status} to ${parsed.status}.`,
+      },
+    }),
+  ]);
+
+  revalidateProject(parsed.projectId);
+
+  return { ok: true };
+}
+
+export async function updateSprintLifecycleAction(formData: FormData) {
+  const user = await requireUser();
+  const parsed = sprintLifecycleSchema.parse({
+    projectId: formData.get("projectId"),
+    sprintId: formData.get("sprintId"),
+    intent: formData.get("intent"),
+  });
+
+  await requireProjectAccess(parsed.projectId, user.id);
+
+  const sprint = await prisma.sprint.findFirst({
+    where: {
+      id: parsed.sprintId,
+      projectId: parsed.projectId,
+    },
+  });
+
+  if (!sprint) {
+    throw new Error("Sprint not found.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (parsed.intent === "activate") {
+      await tx.sprint.updateMany({
+        where: {
+          projectId: parsed.projectId,
+          status: "active",
+          NOT: {
+            id: parsed.sprintId,
+          },
+        },
+        data: {
+          status: "closed",
+        },
+      });
+    }
+
+    await tx.sprint.update({
+      where: {
+        id: parsed.sprintId,
+      },
+      data: {
+        status:
+          parsed.intent === "activate"
+            ? "active"
+            : parsed.intent === "archive"
+              ? "cancelled"
+              : "closed",
+      },
+    });
+  });
 
   revalidateProject(parsed.projectId);
 }
