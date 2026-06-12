@@ -5,6 +5,11 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/server/auth/session";
+import { setHumanApprovalSuccess } from "@/server/github/human-approval";
+import {
+  setHumanApprovalFailure,
+  setHumanApprovalPending,
+} from "@/server/github/redline-status";
 import { parseSprintSpecJson, type SprintSpecFieldError } from "./import-sprint-spec";
 import {
   taskStatusMoveError,
@@ -88,6 +93,30 @@ async function requireProjectAccess(projectId: string, userId: string) {
   return member;
 }
 
+async function requireHumanProjectMember(projectId: string, userId: string) {
+  const member = await prisma.projectMember.findUnique({
+    where: {
+      projectId_userId: {
+        projectId,
+        userId,
+      },
+    },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!member) {
+    throw new Error("You do not have access to this project.");
+  }
+
+  if (member.user.type !== "human") {
+    throw new Error("Only a human project member can change the merge approval lock.");
+  }
+
+  return member;
+}
+
 async function getTaskForProject(taskId: string, projectId: string) {
   const task = await prisma.task.findFirst({
     where: {
@@ -95,7 +124,11 @@ async function getTaskForProject(taskId: string, projectId: string) {
       projectId,
     },
     include: {
-      githubRefs: true,
+      githubRefs: {
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
     },
   });
 
@@ -104,6 +137,39 @@ async function getTaskForProject(taskId: string, projectId: string) {
   }
 
   return task;
+}
+
+function latestHeadRef(
+  task: Awaited<ReturnType<typeof getTaskForProject>>,
+) {
+  return task.githubRefs.find((ref) => ref.headSha);
+}
+
+async function findDevAgent01(projectId: string) {
+  const agents = await prisma.projectMember.findMany({
+    where: {
+      projectId,
+      user: {
+        type: "ai",
+      },
+    },
+    include: {
+      user: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  return (
+    agents.find((member) => {
+      const label = `${member.displayName ?? ""} ${member.user.name ?? ""}`.toLowerCase();
+      return label.includes("agent-01") || label.includes("dev agent 01");
+    }) ??
+    agents.find((member) => member.role === "dev") ??
+    agents[0] ??
+    null
+  );
 }
 
 function revalidateProject(projectId: string) {
@@ -225,7 +291,7 @@ export async function importSprintAction(
     }
 
     return createdSprint;
-  });
+  }, { timeout: 20000, maxWait: 10000 });
 
   revalidateProject(projectId);
 
@@ -425,6 +491,15 @@ export async function updateTaskStatusAction(formData: FormData) {
     throw new Error(moveError);
   }
 
+  const reviewHeadRef = parsed.status === "review" ? latestHeadRef(task) : null;
+
+  if (reviewHeadRef?.headSha) {
+    await setHumanApprovalPending({
+      sha: reviewHeadRef.headSha,
+      targetUrl: reviewHeadRef.pullRequestUrl,
+    });
+  }
+
   await prisma.$transaction([
     prisma.task.update({
       where: {
@@ -445,6 +520,19 @@ export async function updateTaskStatusAction(formData: FormData) {
         progress: parsed.progress || `Status changed to ${parsed.status}.`,
       },
     }),
+    ...(reviewHeadRef
+      ? [
+          prisma.githubRef.update({
+            where: {
+              id: reviewHeadRef.id,
+            },
+            data: {
+              redlineStatus: "pending",
+              checksStatus: "pending",
+            },
+          }),
+        ]
+      : []),
   ]);
 
   revalidateProject(parsed.projectId);
@@ -472,6 +560,15 @@ export async function moveTaskStatusAction(input: {
     };
   }
 
+  const reviewHeadRef = parsed.status === "review" ? latestHeadRef(task) : null;
+
+  if (reviewHeadRef?.headSha) {
+    await setHumanApprovalPending({
+      sha: reviewHeadRef.headSha,
+      targetUrl: reviewHeadRef.pullRequestUrl,
+    });
+  }
+
   await prisma.$transaction([
     prisma.task.update({
       where: {
@@ -497,6 +594,19 @@ export async function moveTaskStatusAction(input: {
         progress: `Dragged from ${task.status} to ${parsed.status}.`,
       },
     }),
+    ...(reviewHeadRef
+      ? [
+          prisma.githubRef.update({
+            where: {
+              id: reviewHeadRef.id,
+            },
+            data: {
+              redlineStatus: "pending",
+              checksStatus: "pending",
+            },
+          }),
+        ]
+      : []),
   ]);
 
   revalidateProject(parsed.projectId);
@@ -621,7 +731,7 @@ export async function reviewTaskAction(formData: FormData) {
     feedback: formData.get("feedback"),
   });
 
-  await requireProjectAccess(parsed.projectId, user.id);
+  await requireHumanProjectMember(parsed.projectId, user.id);
   const task = await getTaskForProject(parsed.taskId, parsed.projectId);
 
   if (task.status !== "review") {
@@ -629,6 +739,24 @@ export async function reviewTaskAction(formData: FormData) {
   }
 
   const approved = parsed.decision === "approve";
+  const headRef = latestHeadRef(task);
+
+  if (headRef?.headSha) {
+    if (approved) {
+      await setHumanApprovalSuccess({
+        sha: headRef.headSha,
+        approvedByName: user.name,
+        targetUrl: headRef.pullRequestUrl,
+      });
+    } else {
+      await setHumanApprovalFailure({
+        sha: headRef.headSha,
+        targetUrl: headRef.pullRequestUrl,
+      });
+    }
+  }
+
+  const devAgent = approved ? null : await findDevAgent01(parsed.projectId);
 
   await prisma.$transaction(async (tx) => {
     if (approved && task.githubRefs.length === 0) {
@@ -649,10 +777,24 @@ export async function reviewTaskAction(formData: FormData) {
         id: task.id,
       },
       data: {
-        status: approved ? "accepted" : "in_progress",
+        status: approved ? "done" : "in_progress",
+        assigneeId: approved ? task.assigneeId : (devAgent?.userId ?? task.assigneeId),
+        completedAt: approved ? (task.completedAt ?? new Date()) : null,
         acceptedAt: approved ? new Date() : null,
       },
     });
+
+    if (headRef) {
+      await tx.githubRef.update({
+        where: {
+          id: headRef.id,
+        },
+        data: {
+          redlineStatus: approved ? "success" : "failure",
+          checksStatus: approved ? "success" : "failure",
+        },
+      });
+    }
 
     await tx.decision.create({
       data: {
@@ -664,8 +806,8 @@ export async function reviewTaskAction(formData: FormData) {
         decision: approved ? "Approved for merge/push." : "Rejected and returned to execution.",
         reason: parsed.feedback || null,
         impact: approved
-          ? "Task is accepted and may be treated as done."
-          : "Task returns to in-progress with human feedback.",
+          ? "Human approval status is success and the task is done."
+          : "Human approval status is failure; the merge remains locked and the task returns to agent-01.",
         reversible: !approved,
       },
     });
@@ -675,10 +817,10 @@ export async function reviewTaskAction(formData: FormData) {
         taskId: task.id,
         actorId: user.id,
         previousStatus: task.status,
-        newStatus: approved ? "accepted" : "in_progress",
+        newStatus: approved ? "done" : "in_progress",
         progress: approved
-          ? "Human gate approved. Merge/push allowed."
-          : `Human gate rejected. Feedback: ${parsed.feedback || "No feedback provided."}`,
+          ? "Human gate approved. GitHub merge lock released."
+          : `Human gate rejected. Merge remains locked. Feedback: ${parsed.feedback || "No feedback provided."}`,
         needsHumanDecision: false,
       },
     });

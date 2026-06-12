@@ -18,6 +18,7 @@ import {
   DialogPortal,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { RedlineStatusBadge } from "./redline-status-badge";
 
 export type StoryDetailTask = {
   id: string;
@@ -40,8 +41,11 @@ export type StoryDetailTask = {
     id: string;
     branch: string | null;
     pullRequestUrl: string | null;
+    headSha: string | null;
     checksStatus: string | null;
+    redlineStatus: string | null;
     note: string | null;
+    approvedByName: string | null;
     createdAt: string;
   }>;
   decisions: Array<{
@@ -223,9 +227,16 @@ export function StoryDetailDrawer({
                             <span className="min-w-0 flex-1 truncate font-mono text-xs">
                               {ref.branch ?? ref.pullRequestUrl ?? "PR"}
                             </span>
-                            <span className="text-xs text-[#047857]">
-                              {ref.checksStatus ?? "linked"}
-                            </span>
+                            {ref.redlineStatus ? (
+                              <RedlineStatusBadge
+                                approvedByName={ref.approvedByName}
+                                status={ref.redlineStatus}
+                              />
+                            ) : (
+                              <span className="text-xs text-[#047857]">
+                                {ref.checksStatus ?? "linked"}
+                              </span>
+                            )}
                             <ExternalLink className="size-3.5 text-[#a1a1aa]" strokeWidth={2} />
                           </a>
                         ))

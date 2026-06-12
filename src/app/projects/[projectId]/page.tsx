@@ -28,6 +28,7 @@ import { requireUser } from "@/server/auth/session";
 import { getProjectForUser } from "@/server/queries/projects";
 import { NewStoryDialog } from "./new-story-dialog";
 import { BoardDragController } from "./board-drag-controller";
+import { RedlineStatusBadge } from "./redline-status-badge";
 import { SprintMenu } from "./sprint-menu";
 import { StoryDetailDrawer, type StoryDetailTask } from "./story-detail-drawer";
 
@@ -67,7 +68,9 @@ type WorkTask = {
     id: string;
     pullRequestUrl: string | null;
     branch: string | null;
+    headSha: string | null;
     checksStatus: string | null;
+    redlineStatus: string | null;
     note: string | null;
     createdAt: Date;
   }>;
@@ -290,7 +293,19 @@ function cleanBacklogTitle(title: string) {
   return title.replace(/^(E\d+|US-\d+)\s+/, "");
 }
 
+function formatUpdateTime(value: Date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(value);
+}
+
 function toStoryDetailTask(task: WorkTask): StoryDetailTask {
+  const approvalDecision = task.decisions.find((decision) =>
+    decision.title.toLowerCase().includes("approved"),
+  );
+
   return {
     id: task.id,
     ref: storyRef(task),
@@ -312,8 +327,11 @@ function toStoryDetailTask(task: WorkTask): StoryDetailTask {
       id: ref.id,
       branch: ref.branch,
       pullRequestUrl: ref.pullRequestUrl,
+      headSha: ref.headSha,
       checksStatus: ref.checksStatus,
+      redlineStatus: ref.redlineStatus,
       note: ref.note,
+      approvedByName: approvalDecision?.madeBy?.name ?? null,
       createdAt: ref.createdAt.toISOString(),
     })),
     decisions: task.decisions.map((decision) => ({
@@ -1184,7 +1202,7 @@ function SprintDashboard({
         <h3 className="mb-3 text-sm font-semibold text-[#18181b]">最近活动</h3>
         <ol className="space-y-2 text-xs text-[#71717a]">
           <ActivityLine actor="You" color="bg-emerald-500" detail="验收通过 US-0 · push 已解锁" time="14:22" />
-          <ActivityLine actor="agent-01" color="bg-amber-500" detail="提交 PR #128 · 等待验收" time="14:05" />
+          <ActivityLine actor="agent-01" color="bg-amber-500" detail="提交 PR · 等待验收" time="14:05" />
           <ActivityLine actor="You" color="bg-rose-500" detail="打回 US-7 · 并发竞态" time="13:48" />
           <ActivityLine actor="agent-03" color="bg-[#4f7cff]" detail="领取 US-1 · 建分支" time="13:30" />
         </ol>
@@ -1478,6 +1496,10 @@ function ReviewGate({
   reviewTasks: WorkTask[];
 }) {
   const selectedTask = reviewTasks[0];
+  const selectedPr = selectedTask?.githubRefs[0];
+  const selectedApproval = selectedTask?.decisions.find((decision) =>
+    decision.title.toLowerCase().includes("approved"),
+  );
   const selectedCriteria = (selectedTask?.acceptanceCriteria ?? "")
     .split("\n")
     .map((criterion) => criterion.trim())
@@ -1510,7 +1532,10 @@ function ReviewGate({
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-[11px] text-[#a1a1aa]">
-                      {storyRef(task)} · PR #{pullRequestNumber(task.githubRefs[0]?.pullRequestUrl) || index + 1}
+                      {storyRef(task)}
+                      {pullRequestNumber(task.githubRefs[0]?.pullRequestUrl)
+                        ? ` · PR #${pullRequestNumber(task.githubRefs[0]?.pullRequestUrl)}`
+                        : ""}
                     </span>
                     <span className="font-mono text-[10px] text-[#a1a1aa]">
                       {index === 0 ? "now" : `${index * 8}m`}
@@ -1541,13 +1566,22 @@ function ReviewGate({
                     </span>
                   </div>
                   <p className="mt-0.5 font-mono text-[11px] text-[#a1a1aa]">
-                    PR #{pullRequestNumber(selectedTask.githubRefs[0]?.pullRequestUrl) || "128"} · {selectedTask.githubRefs[0]?.branch ?? "feat/us-4-approval-gate"} · {selectedTask.assignee?.name ?? "agent-01"}
+                    {pullRequestNumber(selectedPr?.pullRequestUrl)
+                      ? `PR #${pullRequestNumber(selectedPr?.pullRequestUrl)} · `
+                      : ""}
+                    {selectedPr?.branch ?? "暂无分支"} · {selectedTask.assignee?.name ?? "未指派"}
                   </p>
                 </div>
                 <div className="ml-auto flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-[#b45309]">
                   <LockKeyhole className="size-4" strokeWidth={2} />
                   未验收 · push 被阻止
                 </div>
+                {selectedPr?.pullRequestUrl || selectedPr?.headSha ? (
+                  <RedlineStatusBadge
+                    approvedByName={selectedApproval?.madeBy?.name}
+                    status={selectedPr.redlineStatus}
+                  />
+                ) : null}
               </div>
 
               <div className="grid grid-cols-1 gap-0 xl:grid-cols-[1fr_300px]">
@@ -1600,10 +1634,18 @@ function ReviewGate({
                     Agent 执行日志
                   </h3>
                   <ol className="relative space-y-3 border-l border-[#e4e4e7] pl-4 text-[12px]">
-                    <ReviewLog color="bg-[#4f7cff]" text="领取任务 · 建分支" time="14:02:11" />
-                    <ReviewLog color="bg-[#4f7cff]" text="写代码 · 3 个文件" time="14:03:40" />
-                    <ReviewLog color="bg-emerald-500" text="测试 22/22 通过" time="14:05:02" />
-                    <ReviewLog color="bg-amber-500" text="开 PR #128 · 等待验收" time="14:05:09" />
+                    {selectedTask.updates.length > 0 ? (
+                      selectedTask.updates.slice(0, 6).map((update) => (
+                        <ReviewLog
+                          color={update.newStatus === "review" ? "bg-amber-500" : "bg-[#4f7cff]"}
+                          key={update.id}
+                          text={update.progress}
+                          time={formatUpdateTime(update.createdAt)}
+                        />
+                      ))
+                    ) : (
+                      <li className="text-[#a1a1aa]">暂无执行日志。</li>
+                    )}
                   </ol>
                 </aside>
               </div>
@@ -1699,6 +1741,11 @@ function TaskCard({
   const isDone = task.status === "accepted" || task.status === "done";
   const latestPr = task.githubRefs[0];
   const latestUpdate = task.updates[0];
+  const approvalDecision = task.decisions.find((decision) =>
+    decision.title.toLowerCase().includes("approved"),
+  );
+  const redlineStatus =
+    latestPr?.pullRequestUrl || latestPr?.headSha ? latestPr.redlineStatus : null;
   const taskRef = storyRef(task);
 
   return (
@@ -1765,12 +1812,26 @@ function TaskCard({
         </Link>
       </p>
 
+      {redlineStatus ? (
+        <div className="mt-2 flex">
+          <RedlineStatusBadge
+            approvedByName={approvalDecision?.madeBy?.name}
+            status={redlineStatus}
+          />
+        </div>
+      ) : null}
+
       {isTodo ? (
         <TodoAssignment agents={agents} projectId={projectId} task={task} />
       ) : null}
 
       {isRunning ? (
-        <RunningMeta latestPr={latestPr} projectId={projectId} task={task} />
+        <RunningMeta
+          latestPr={latestPr}
+          latestUpdate={latestUpdate}
+          projectId={projectId}
+          task={task}
+        />
       ) : null}
 
       {isBlocked ? (
@@ -1778,7 +1839,12 @@ function TaskCard({
       ) : null}
 
       {isReview ? (
-        <ReviewMeta latestPr={latestPr} latestUpdate={latestUpdate} projectId={projectId} task={task} />
+        <ReviewMeta
+          latestPr={latestPr}
+          latestUpdate={latestUpdate}
+          projectId={projectId}
+          task={task}
+        />
       ) : null}
 
       {isDone ? (
@@ -1864,10 +1930,12 @@ function TodoAssignment({
 
 function RunningMeta({
   latestPr,
+  latestUpdate,
   projectId,
   task,
 }: {
   latestPr: { pullRequestUrl: string | null; branch: string | null } | undefined;
+  latestUpdate: { progress: string } | undefined;
   projectId: string;
   task: { id: string; assignee: { name: string | null } | null };
 }) {
@@ -1876,11 +1944,11 @@ function RunningMeta({
       <div className="mt-2.5 space-y-1.5 font-mono text-[11px] text-[#71717a]">
         <div className="flex items-center gap-1.5">
           <GitBranch className="size-3" strokeWidth={2} />
-          {latestPr?.branch ?? "feat/story-agent-pr"}
+          {latestPr?.branch ?? "暂无分支"}
         </div>
         <div className="flex items-center gap-1.5 text-[#b45309]">
           <Clock3 className="size-3" strokeWidth={2} />
-          测试运行中 · 14/22
+          {latestUpdate?.progress ?? "暂无执行进度"}
         </div>
       </div>
       <div className="mt-2.5 flex items-center gap-2 border-t border-[#e4e4e7] pt-2">
@@ -1890,7 +1958,7 @@ function RunningMeta({
         <span className="text-xs text-[#71717a]">
           {task.assignee?.name ?? "agent"}
         </span>
-        <span className="ml-auto font-mono text-[10px] text-[#a1a1aa]">2m 12s</span>
+        <span className="ml-auto font-mono text-[10px] text-[#a1a1aa]">暂无耗时</span>
       </div>
       <div className="mt-2 grid grid-cols-[1fr_auto] gap-1.5">
         <form action={updateTaskStatusAction} className="contents">
@@ -1939,11 +2007,11 @@ function BlockedMeta({
     <>
       <div className="mt-2 rounded-md border-l-2 border-rose-400 bg-rose-50 px-2 py-1.5 text-[11px] text-[#be123c]">
         <span className="font-medium">打回:</span>
-        {latestUpdate?.progress ?? "并发认领仍有竞态,需加分布式锁"}
+        {latestUpdate?.progress ?? "暂无打回反馈"}
       </div>
       <div className="mt-2.5 flex items-center gap-1.5 font-mono text-[11px] text-[#71717a]">
         <GitBranch className="size-3" strokeWidth={2} />
-        {latestPr?.branch ?? "feat/story-claim-lock"}
+        {latestPr?.branch ?? "暂无分支"}
       </div>
       <div className="mt-2.5 flex items-center gap-2 border-t border-[#e4e4e7] pt-2">
         <span className="grid h-5 w-5 place-items-center rounded bg-emerald-100 text-emerald-600">
@@ -1976,7 +2044,7 @@ function ReviewMeta({
     <>
       <div className="mt-2.5 flex items-center gap-2 font-mono text-[11px] text-[#047857]">
         <Check className="size-3" strokeWidth={2} />
-        {latestUpdate?.progress ?? "测试 22/22 通过 · +184 −20"}
+        {latestUpdate?.progress ?? "暂无验收日志"}
       </div>
       <div className="mt-2.5 flex items-center gap-2 border-t border-[#e4e4e7] pt-2">
         <span className="grid h-5 w-5 place-items-center rounded bg-emerald-100 text-emerald-600">
@@ -1985,15 +2053,19 @@ function ReviewMeta({
         <span className="text-xs text-[#71717a]">
           {task.assignee?.name ?? "agent"}
         </span>
-        <a
-          className="ml-auto flex items-center gap-1 text-[10px] text-[#b45309]"
-          href={latestPr?.pullRequestUrl ?? "#"}
-          rel="noreferrer"
-          target="_blank"
-        >
-          <LockKeyhole className="size-3" strokeWidth={2} />
-          push 已锁
-        </a>
+        {latestPr?.pullRequestUrl ? (
+          <a
+            className="ml-auto flex items-center gap-1 text-[10px] text-[#b45309]"
+            href={latestPr.pullRequestUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <GitPullRequest className="size-3" strokeWidth={2} />
+            查看 PR
+          </a>
+        ) : (
+          <span className="ml-auto text-[10px] text-[#a1a1aa]">暂无 PR</span>
+        )}
       </div>
       <div className="mt-3 grid gap-1.5">
         <form action={reviewTaskAction} className="contents">

@@ -346,8 +346,10 @@ model GithubRef {
   taskId         String
   branch         String?
   commitHash     String?
+  headSha        String?
   pullRequestUrl String?
   checksStatus   String?
+  redlineStatus  String?
   note           String?
   createdById    String
   createdAt      DateTime @default(now())
@@ -360,6 +362,7 @@ model GithubRef {
   @@index([projectId])
   @@index([taskId])
   @@index([commitHash])
+  @@index([headSha])
 }
 
 model Summary {
