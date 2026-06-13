@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Helmsman — Story 详情</title><script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{paper:{DEFAULT:'#f7f7f8',sub:'#fafafa'},line:'#e4e4e7',ink:{900:'#18181b',700:'#3f3f46',500:'#71717a',400:'#a1a1aa'},accent:{DEFAULT:'#4f7cff',soft:'#eef2ff',dim:'#3a5bd0'}},fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['ui-monospace','Menlo','monospace']}}}}</script>
+<style>body{background:#f7f7f8}.drawer-shadow{box-shadow:-16px 0 48px -16px rgba(16,24,40,.22)}</style></head>
+<body class="font-sans text-ink-700 antialiased">
+<!--
+  ====== Story 详情 · 弹出行为说明(实现必须照此)======
+  形态:右侧抽屉(只读)。  叠加层次:遮罩 z-40 / 抽屉 z-50,均盖在顶栏 z-30 之上。
+  大小:宽 w-full max-w-[560px];高 h-[100dvh](用 dvh,移动端不抖)。
+  滚动:头部 shrink-0 固定;正文 flex-1 overflow-y-auto 内部滚动(长内容不溢出页面)。
+  关闭:只读无输入 → 点左侧遮罩 / 按 Esc / 点右上角 X 三者都关闭;关闭不丢 ?sprint/?view。
+  (对比:导入框有输入,点遮罩要防误关;此处只读,点遮罩直接关。)
+-->
+<!-- 背后看板淡化 -->
+<div class="pointer-events-none fixed inset-0 p-4 opacity-40 blur-[1px]"><div class="mb-4 h-6 w-48 rounded bg-zinc-200"></div><div class="grid grid-cols-4 gap-3"><div class="h-64 rounded-xl border border-line bg-white"></div><div class="h-64 rounded-xl border border-line bg-white"></div><div class="h-64 rounded-xl border border-amber-200 bg-amber-50/40"></div><div class="h-64 rounded-xl border border-line bg-white"></div></div></div>
+<!-- 遮罩:只读详情 → 点它即可关闭(cursor-pointer 提示可点) -->
+<div class="group fixed inset-0 cursor-pointer bg-ink-900/20" title="点空白处关闭">
+  <span class="absolute left-6 top-1/2 -translate-y-1/2 rounded-md bg-white/80 px-2 py-1 text-[11px] text-ink-400 opacity-0 transition group-hover:opacity-100">点空白处关闭 ✕</span>
+</div>
+
+<!-- 右侧抽屉 -->
+<aside class="drawer-shadow fixed right-0 top-0 z-50 flex h-[100dvh] w-full max-w-[560px] flex-col border-l border-line bg-white">
+  <!-- header(固定不滚) -->
+  <div class="flex shrink-0 items-center gap-3 border-b border-line px-5 py-3.5">
+    <span class="font-mono text-xs text-ink-400">US-4</span>
+    <span class="rounded bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">待验收</span>
+    <span class="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-ink-500">P0</span>
+    <button class="ml-auto grid h-7 w-7 place-items-center rounded-md text-ink-400 hover:bg-paper-sub"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+
+  <div class="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+    <h1 class="text-lg font-semibold text-ink-900">人类验收闸门 · push 门禁</h1>
+
+    <!-- 元信息 -->
+    <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+      <div><span class="text-ink-400">负责人 </span><span class="inline-flex items-center gap-1 text-ink-700"><span class="grid h-4 w-4 place-items-center rounded bg-emerald-100 text-emerald-600"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/></svg></span>agent-01</span></div>
+      <div><span class="text-ink-400">Sprint </span><span class="text-ink-700">Sprint 1</span></div>
+      <div><span class="text-ink-400">Epic </span><span class="text-ink-700">E5 人类审批闸门</span></div>
+    </div>
+
+    <!-- 用户故事 -->
+    <section><h3 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">用户故事</h3>
+      <p class="rounded-lg border border-line bg-paper-sub p-3 text-sm text-ink-700">作为 <b class="font-medium text-ink-900">Lead</b>,我想要 在 PR 合并/push 前对 agent 产出做验收,以便于 保留对质量的最终控制权。</p></section>
+
+    <!-- 验收标准 -->
+    <section><h3 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">验收标准(Gherkin)</h3>
+      <pre class="overflow-x-auto rounded-lg border border-line bg-paper-sub p-3 font-mono text-[12px] leading-relaxed text-ink-700">Given 一个 story 处于「待验收」且有关联 PR
+When 我点「通过验收」
+Then PR 才被允许合并/push,story 进 Done</pre></section>
+
+    <!-- 关联 PR -->
+    <section><h3 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">关联 PR</h3>
+      <a class="flex items-center gap-2 rounded-lg border border-line p-3 text-sm hover:border-accent/40" href="#">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-ink-500"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v6a6 6 0 0 0 6 6h3"/></svg>
+        <span class="font-mono text-xs text-ink-700">PR #128</span><span class="font-mono text-[11px] text-ink-400">feat/us-4-approval-gate</span>
+        <span class="ml-auto font-mono text-[11px] text-emerald-600">✓ 22/22</span></a></section>
+
+    <!-- 状态历史时间线 -->
+    <section><h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">状态历史</h3>
+      <ol class="relative space-y-3 border-l border-line pl-4 text-[13px]">
+        <li><span class="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-amber-500"></span><p class="text-ink-700">agent-01 提 PR · <span class="text-ink-400">执行中 → 待验收</span></p><p class="font-mono text-[10px] text-ink-400">14:05:09</p></li>
+        <li><span class="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-accent"></span><p class="text-ink-700">agent-01 写代码 3 文件 · 测试 22/22</p><p class="font-mono text-[10px] text-ink-400">14:03:40</p></li>
+        <li><span class="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-accent"></span><p class="text-ink-700">You 指派给 agent-01 · <span class="text-ink-400">To Do → 执行中</span></p><p class="font-mono text-[10px] text-ink-400">14:02:11</p></li>
+        <li><span class="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-ink-400"></span><p class="text-ink-700">You 创建 story</p><p class="font-mono text-[10px] text-ink-400">13:30:00</p></li>
+      </ol></section>
+
+    <!-- 审批记录 -->
+    <section><h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">审批记录</h3>
+      <div class="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[12px]"><p class="font-medium text-rose-700">打回 · You · 13:48</p><p class="mt-0.5 text-rose-600/90">并发认领仍有竞态,需加分布式锁</p></div></section>
+  </div>
+</aside>
+</body></html>

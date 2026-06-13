@@ -1,0 +1,225 @@
+# Helmsman — Scrum 项目管理工件
+
+> 工作名 **Helmsman**(可改名)。理念:**agent 干活、人类掌舵**。
+> 本文件就是 Product Backlog 的事实来源,每个 Sprint 更新一次。
+
+---
+
+## 1. Product Goal(产品目标)
+
+> 让一个小团队的 Lead 能把 user story 派发给多个 AI agent,agent 自动开分支/写码/测/提 PR 并回填看板;**所有产出必须经人类验收才能 push**,且 Lead 始终能一眼看清"哪个 agent 在做什么、卡在哪"。
+
+**Sprint 1 目标(walking skeleton):** 跑通**单 agent 的完整闭环**——派发一个 story → agent 干活提 PR → 人类验收/打回 → 看板状态自动更新。先证明这条命脉走得通,再上规模。
+
+---
+
+## 2. Product Backlog —— Epic 分解与优先级
+
+优先级依据 = 用户访谈已验证的两大痛点:**① 多 agent 可观测性 ② 派发→验收闭环**。
+
+| # | Epic | 价值 | 优先级 | 目标 Sprint |
+|---|------|------|--------|------------|
+| **E1** | 核心 Scrum 看板(backlog / sprint / story / 看板列) | 协作底座 | Must | S1 |
+| **E2** | Agent 作为一等成员(注册 agent、把 story 指派给 agent) | 核心差异化 | Must | S1 |
+| **E3** | Agent 执行流水线(领取→分支→写码→跑测→提 PR) | 核心差异化 | Must | S1–S2 |
+| **E4** | 状态自动回填(agent 活动 → 看板列) | 消灭手工回填 | Must | S2 |
+| **E5** | 人类审批闸门(验收队列、通过/打回+反馈、返工循环) | **红线**,质量掌舵权 | Must | S1–S2 |
+| **E6** | 多 agent 可观测面板("谁在做什么、卡在哪") | **第 1 痛点** | Should | S3 |
+| **E7** | 反馈返工闭环增强(打回原因结构化、agent 带反馈重做) | 提效 | Could | S3+ |
+
+---
+
+## 3. Sprint 1 — User Stories(Cohn + Gherkin)
+
+**Sprint 1 Goal:** 单 agent 跑通 派发→PR→人类验收→状态更新 的闭环。
+
+### US-1（E1)看板与 Story 基础
+> **As a** 团队 Lead,**I want to** 在看板上创建 user story 并在列间流转,**so that** 我有一个承载人和 agent 工作的底座。
+
+```gherkin
+Scenario: 创建并移动 story
+  Given 我在一个 sprint 看板上
+  When 我新建一个 user story 并把它从「To Do」拖到「In Progress」
+  Then 该 story 显示在「In Progress」列,且记录了状态变更时间
+```
+
+### US-2（E2)把 Story 指派给 Agent
+> **As a** Lead,**I want to** 把一个 story 指派给某个 AI agent(像指派给人一样),**so that** agent 能领走这件可验证的活。
+
+```gherkin
+Scenario: 指派 story 给 agent
+  Given 一个 agent 已注册并在线
+  And 一个 story 处于「To Do」
+  When 我把该 story 的负责人设为该 agent
+  Then story 进入「Agent 执行中」状态
+  And 系统记录指派人、agent、时间
+```
+
+### US-3（E3)Agent 自动执行并提 PR
+> **As a** Lead,**I want to** agent 领取后自动开分支、写码、跑测试并提 PR,**so that** 我不用手把手带它干每一步。
+
+```gherkin
+Scenario: agent 执行任务到提 PR
+  Given 一个 story 已指派给 agent
+  When agent 领取该任务
+  Then 系统为它创建一个以 story 命名的分支
+  And agent 提交代码并运行测试
+  And 测试通过后自动开启一个关联该 story 的 PR
+  And story 自动流转到「待验收」列
+```
+
+### US-4（E5)人类验收闸门(红线)
+> **As a** Lead,**I want to** 在 PR 合并/push 前对 agent 产出做验收,**so that** 我保留对质量的最终控制权。
+
+```gherkin
+Scenario: 验收通过
+  Given 一个 story 处于「待验收」且有关联 PR
+  When 我点「通过验收」
+  Then 该 PR 才被允许合并/push
+  And story 流转到「Done」
+
+Scenario: 验收打回
+  Given 一个 story 处于「待验收」
+  When 我点「打回」并填写反馈
+  Then PR 被阻止合并
+  And story 退回「Agent 执行中」并附带我的反馈
+```
+
+> 🚧 强约束:**未经人类「通过验收」,任何 agent 产出都不得 push。** 这是产品红线,在 US-4 里以硬门禁实现。
+
+### US-5（E4 最小版)状态自动回填
+> **As a** Lead,**I want to** 看板状态随 agent 的真实进度自动更新,**so that** 看板永远反映现实、我不用手动维护。
+
+```gherkin
+Scenario: agent 进度驱动看板
+  Given 一个 story 已指派给 agent
+  When agent 开始执行 / 提交 PR / 被打回
+  Then 对应 story 自动在「执行中 / 待验收 / 返工中」之间流转,无需人工拖动
+```
+
+---
+
+## 3b. Sprint 1 任务拆解(Story → 开发任务)
+
+> Sprint = **1 周**。研发是 AI:**吞吐高、缺陷率也高** → 每个 story 都配 🛡 守护任务(测试/边界/日志/门禁),否则验收闸门会被劣质产出淹没。
+> 任务粒度 = 「一个 agent、一个 PR」可独立完成、可独立验收。
+> 标签:`[BE]`后端 `[FE]`前端 `[INFRA]`集成 `[TEST]`测试 `🛡`守护。
+
+### US-1 看板与 Story 基础
+- [ ] `[BE]` Story / Sprint / 看板列 的数据模型 + CRUD API
+- [ ] `[BE]` 状态变更记录(谁、何时、从哪列到哪列)
+- [ ] `[FE]` 看板视图:列 + 卡片 + 拖拽流转
+- [ ] `[TEST]` 🛡 状态机单元测试:非法流转(如跳过验收直达 Done)必须被拒
+- **DoD:** 创建/拖动 story 生效且留痕;非法流转有测试覆盖。
+
+### US-2 把 Story 指派给 Agent
+- [ ] `[BE]` Agent 注册与在线状态(心跳/last-seen)
+- [ ] `[BE]` story 负责人可设为 agent;写入指派人/agent/时间
+- [ ] `[FE]` 指派 UI:人 / agent 统一的负责人选择器
+- [ ] `[BE]` 🛡 防呆:只能指派给「在线」agent;离线指派给出明确报错
+- [ ] `[TEST]` 🛡 并发指派/重复指派的幂等性测试
+- **DoD:** 能像指派人一样把 story 指派给在线 agent,边界有保护。
+
+### US-3 Agent 自动执行并提 PR
+- [ ] `[INFRA]` Agent 领取任务的接口/事件(认领锁,防多 agent 抢同一 story)
+- [ ] `[INFRA]` 按 story 自动建分支(命名规范 + 冲突处理)
+- [ ] `[INFRA]` agent 提交代码 → 触发测试 → 通过后开 PR(关联 story)
+- [ ] `[BE]` PR 与 story 双向关联,story 自动进「待验收」
+- [ ] `[TEST]` 🛡 **测试不过 = 不开 PR、不进待验收**(强制质量前置)
+- [ ] `[BE]` 🛡 单 story 执行超时 / agent 卡死的兜底(自动回「To Do」并告警)
+- [ ] `[BE]` 🛡 完整执行日志(每步留痕,供事后排查 AI 出的问题)
+- **DoD:** 指派后 agent 全自动跑到 PR;测试不过则拦在门外;异常可追溯。
+
+### US-4 人类验收闸门(🚧 红线)
+- [ ] `[BE]` **push/merge 硬门禁:未「通过验收」一律阻止**(产品红线)
+- [ ] `[FE]` 验收队列:待验收 story + 关联 PR diff 一屏可看
+- [ ] `[FE]` 「通过」/「打回 + 反馈」操作
+- [ ] `[BE]` 打回:PR 阻止合并,story 退回「Agent 执行中」并挂上反馈
+- [ ] `[BE]` 🛡 审计:每次通过/打回记录验收人、时间、反馈(责任可追)
+- [ ] `[TEST]` 🛡 绕过门禁的尝试必须失败(直接调 merge API 也挡得住)
+- **DoD:** 没有人点「通过」,任何 agent 产出都 push 不出去——代码级、非仅 UI 级。
+
+### US-5 状态自动回填
+- [ ] `[BE]` 监听 agent 事件(开始/提 PR/被打回)→ 驱动 story 流转
+- [ ] `[FE]` 看板状态实时刷新,无需手动拖动
+- [ ] `[BE]` 🛡 事件与真实 git/PR 状态对账,冲突时以真实状态为准 + 告警
+- [ ] `[TEST]` 🛡 乱序/重复事件下状态不被写花
+- **DoD:** 看板状态随真实进度自动走,且与 git 真相不脱节。
+
+---
+
+## 4. Roadmap(发布切片)
+
+| 发布 | 范围 | 验证目标 |
+|------|------|----------|
+| **R1 – Walking Skeleton(S1)** | US-1..5,单 agent 闭环 | 核心循环走得通吗? |
+| **R2 – 闭环加固(S2)** | E3/E4/E5 完整化,返工循环可用 | agent 产出质量 + 验收体验 |
+| **R3 – 规模化可观测(S3)** | E6 多 agent 面板 + E7 结构化反馈 | 解决「10 个 agent 不知道谁干啥」 |
+| **R4 – 小团队 GTM(S4+)** | 多人协作、权限、定价 | 付费意愿 |
+
+---
+
+## 5. Scrum 仪式 cadence(小团队简化版)
+
+- **Sprint 长度:** 1 周(早期产品,快反馈)
+- **Sprint Planning:** 周一,从本 backlog 顶部拉故事进 Sprint
+- **Daily:** 异步,看板即站会(尤其当 agent 也在看板上)
+- **Review:** 周五,演示可工作的闭环
+- **Retro:** 周五,1 件继续 / 1 件改进
+- **Backlog Refinement:** 随时更新本文件;新洞察来自用户访谈
+
+---
+
+## 6. 待办:开发前必须先验证的假设
+
+- [ ] 外部 3+ Lead 独立确认「多 agent 可观测性」是真痛(目前样本=1,创始人本人)
+- [ ] 验证「人类验收会不会变成新瓶颈」
+- [ ] 验证付费意愿与定价模型
+
+---
+
+## 7. Sprint 2 候选(已记录,暂不展开)
+
+- **GitHub 正式接入**(横跨 E3 执行流水线 + E5 审批闸门):
+  - MVP 期先用 fine-grained PAT + 单测试仓库跑通闭环;产品化换 **GitHub App**(多租户、自助安装、webhook)。
+  - 红线落地方式:**branch protection + 必需状态检查(Checks API)**——agent 提 PR 时把 `helmsman/human-approval` 检查置 pending(卡住合并),人类点「通过」才置 success 解锁。天然满足"绕过 merge API 必须失败"。
+  - 坑:必需检查须用 Checks API(非旧 Status API);别把 App 加进分支保护 bypass 名单。
+  - 详细文档 `GITHUB-INTEGRATION.md` 待 Sprint 2 再写。
+
+---
+
+## 8. 下一步开发(Sprint 2 起步,先行 story)
+
+### US-8(重写)Sprint 菜单:切换 + 导入(E1 · P0)
+> 背景:之前的纯"切换器下拉"Codex 两次未实现。重写为**一个 Sprint 菜单**同时解决"切换历史 Sprint"和"导入/新建 Sprint",并附**设计稿**:`docs/design/mockups/sprint-import.html`。
+> 导入格式 = `docs/sprints/sprint-spec.template.json`(固定 Sprint Spec)。
+
+> **As a** Lead,**I want to** 在头部用一个 Sprint 菜单切换 Sprint、并用 JSON 一键导入新 Sprint,**so that** 我能管理多个 Sprint,且用固定模板快速拉起下一个 Sprint。
+
+```gherkin
+Scenario: 切换 Sprint
+  Given 项目下有 ≥1 个 Sprint
+  When 我打开头部 Sprint 菜单并选一个 Sprint
+  Then 看板/Backlog/仪表盘/验收 都按所选 Sprint 渲染(URL 带 ?sprint=<id>,且保留 ?view=)
+  And 默认显示最新的 active Sprint
+  And 只有 1 个 Sprint 时菜单仍可用(不出现"死下拉"),「导入/新建 Sprint」始终可点
+
+Scenario: 导入 Sprint
+  Given 我在 Sprint 菜单点「导入 / 新建 Sprint」
+  When 我粘贴一段符合 Sprint Spec 格式的 JSON 并点「导入」
+  Then 系统 zod 校验通过后,事务创建 Sprint + Epics + Stories + Tasks
+  And 自动切换到新 Sprint(?sprint=<newId>)
+
+Scenario: 导入校验失败
+  Given 我粘贴的 JSON 不合法或缺字段
+  When 我点「导入」
+  Then 弹窗内内联列出具体字段错误,不创建任何数据(整体回滚)
+```
+任务:
+- [ ] `[FE]` 头部 **Sprint 菜单**(下拉):列出 Sprint 可切换 + 「导入/新建 Sprint」入口(按设计稿)
+- [ ] `[BE]` 页面按 `?sprint=<id>` 选 sprint;缺省最新 active;**`?sprint=` 与 `?view=` 共存不互相覆盖**
+- [ ] `[FE]` 四视图都跟随所选 sprint
+- [ ] `[FE]` **导入弹窗**(粘贴 JSON / 上传 .json + 校验结果区,按设计稿五态)
+- [ ] `[BE]` `importSprintAction(spec)`:**zod 校验** → 事务创建 Sprint+Epics+Stories+Tasks → 返回 newSprintId(复用 seed-sprint1 落库逻辑)
+- [ ] `[TEST]` 🛡 非法/越权 sprintId 回退默认;导入非法 JSON 整体回滚、内联报错;成功后跳新 Sprint
+- [ ] `[TEST]` 复用 `pnpm seed:e2e && seed:sprint1` 后,e2e 覆盖:切换 + 导入一个最小 Spec

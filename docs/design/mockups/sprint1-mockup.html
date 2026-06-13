@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh" class="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Helmsman — Sprint 1 高保真原型</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: {
+      colors: {
+        ink: { 950:'#0a0a0b', 900:'#101012', 850:'#161619', 800:'#1d1d21', 700:'#2a2a30', 600:'#3a3a42' },
+        accent: { DEFAULT:'#4f7cff', soft:'#1b2742', dim:'#3a5bd0' },
+      },
+      fontFamily: {
+        sans: ['Inter','ui-sans-serif','system-ui','sans-serif'],
+        mono: ['ui-monospace','"JetBrains Mono"','"SF Mono"','Menlo','monospace'],
+      },
+    }}
+  }
+</script>
+<style>
+  body{ background:#0a0a0b; }
+  .card-shadow{ box-shadow: 0 1px 0 rgba(255,255,255,.03), 0 8px 24px -12px rgba(0,0,0,.6); }
+  ::-webkit-scrollbar{ height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb{ background:#2a2a30; border-radius:8px; }
+  .tabbtn[data-active="true"]{ color:#fff; }
+  .tabbtn[data-active="true"]::after{ content:''; position:absolute; left:0; right:0; bottom:-1px; height:2px; background:#4f7cff; }
+  .diff-add{ background:rgba(52,153,96,.12); border-left:2px solid #2f9e5f; }
+  .diff-del{ background:rgba(225,72,92,.10); border-left:2px solid #d8475a; }
+</style>
+</head>
+<body class="font-sans text-zinc-300 antialiased">
+
+<!-- ===== Top bar ===== -->
+<header class="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-ink-700 bg-ink-900/80 px-4 backdrop-blur">
+  <div class="flex items-center gap-2">
+    <div class="grid h-7 w-7 place-items-center rounded-md bg-accent text-white">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 7v6c0 5 8 9 8 9s8-4 8-9V7l-8-5Z"/></svg>
+    </div>
+    <span class="text-sm font-semibold text-white">Helmsman</span>
+  </div>
+
+  <nav class="flex items-center gap-1 text-sm">
+    <button class="tabbtn relative px-3 py-2 text-zinc-400 hover:text-white" data-tab="board" data-active="true">看板</button>
+    <button class="tabbtn relative px-3 py-2 text-zinc-400 hover:text-white" data-tab="review">验收闸门</button>
+  </nav>
+
+  <div class="ml-auto flex items-center gap-3">
+    <!-- Agent fleet 健康度(可观测性入口) -->
+    <div class="hidden items-center gap-3 rounded-lg border border-ink-700 bg-ink-850 px-3 py-1.5 text-xs sm:flex">
+      <span class="text-zinc-500">Agent 机群</span>
+      <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-accent"></span>3 执行</span>
+      <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-zinc-500"></span>1 空闲</span>
+      <span class="flex items-center gap-1 text-rose-400"><span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>1 异常</span>
+    </div>
+    <div class="grid h-7 w-7 place-items-center rounded-full bg-ink-700 text-xs font-medium text-zinc-300">Y</div>
+  </div>
+</header>
+
+<!-- ============================================================= -->
+<!-- SCREEN 1 : KANBAN BOARD                                        -->
+<!-- ============================================================= -->
+<main id="tab-board" class="px-4 py-4">
+  <!-- Sprint 头 -->
+  <div class="mb-4 flex flex-wrap items-center gap-3">
+    <h1 class="text-lg font-semibold text-white">Sprint 1 · Walking Skeleton</h1>
+    <span class="rounded-md border border-ink-700 bg-ink-850 px-2 py-0.5 text-xs text-zinc-400">6.10 → 6.17 · 还剩 4 天</span>
+    <div class="flex items-center gap-2 text-xs text-zinc-500">
+      <div class="h-1.5 w-40 overflow-hidden rounded-full bg-ink-700"><div class="h-full w-[45%] bg-accent"></div></div>
+      <span>9 / 20 pts</span>
+    </div>
+    <button class="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition active:scale-[.98]">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>新建 Story
+    </button>
+  </div>
+
+  <!-- 列 -->
+  <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+
+    <!-- To Do -->
+    <section class="flex flex-col rounded-xl border border-ink-700 bg-ink-900/50">
+      <div class="flex items-center justify-between px-3 py-2.5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-zinc-500"></span><span class="text-sm font-medium text-zinc-200">To Do</span></div>
+        <span class="text-xs text-zinc-500">2</span>
+      </div>
+      <div class="flex flex-col gap-2 px-2 pb-2">
+        <!-- 卡片: 未指派, 展示指派选择器(US-2 时刻) -->
+        <article class="card-shadow rounded-lg border border-ink-700 bg-ink-850 p-3">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-5</span>
+            <span class="rounded bg-ink-700 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">3 pts</span>
+          </div>
+          <p class="text-sm text-zinc-100">状态自动回填:agent 进度驱动看板流转</p>
+          <!-- 指派选择器 (打开态) -->
+          <div class="mt-3 rounded-lg border border-accent/40 bg-accent-soft p-1.5">
+            <p class="px-1.5 pb-1 text-[10px] uppercase tracking-wide text-accent">指派给</p>
+            <button class="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs hover:bg-white/5">
+              <span class="grid h-5 w-5 place-items-center rounded bg-emerald-500/15 text-emerald-400"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M9 8V5a3 3 0 0 1 6 0v3M9 14h.01M15 14h.01"/></svg></span>
+              <span class="text-zinc-200">agent-02</span><span class="ml-auto text-[10px] text-emerald-400">在线</span>
+            </button>
+            <button class="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs hover:bg-white/5">
+              <span class="grid h-5 w-5 place-items-center rounded bg-zinc-600/40 text-zinc-300">M</span>
+              <span class="text-zinc-200">Mia (人类)</span>
+            </button>
+            <button class="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs opacity-50" disabled>
+              <span class="grid h-5 w-5 place-items-center rounded bg-zinc-700 text-zinc-500"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/></svg></span>
+              <span class="text-zinc-400">agent-05</span><span class="ml-auto text-[10px] text-zinc-500">离线·不可指派</span>
+            </button>
+          </div>
+        </article>
+
+        <article class="card-shadow rounded-lg border border-ink-700 bg-ink-850 p-3 hover:border-ink-600">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-6</span>
+            <span class="rounded bg-ink-700 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">2 pts</span>
+          </div>
+          <p class="text-sm text-zinc-100">看板列拖拽流转 + 状态留痕</p>
+          <div class="mt-3 flex items-center gap-1.5 text-xs text-zinc-500">
+            <span class="grid h-5 w-5 place-items-center rounded-full border border-dashed border-ink-600 text-[10px]">+</span>未指派
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Agent 执行中 -->
+    <section class="flex flex-col rounded-xl border border-ink-700 bg-ink-900/50">
+      <div class="flex items-center justify-between px-3 py-2.5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-accent"></span><span class="text-sm font-medium text-zinc-200">Agent 执行中</span></div>
+        <span class="text-xs text-zinc-500">2</span>
+      </div>
+      <div class="flex flex-col gap-2 px-2 pb-2">
+        <!-- Agent 卡片: 显示分支 / 测试 / 进度 -->
+        <article class="card-shadow rounded-lg border border-accent/30 bg-ink-850 p-3">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-3</span>
+            <span class="flex items-center gap-1 text-[10px] text-accent"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-accent"></span>运行中</span>
+          </div>
+          <p class="text-sm text-zinc-100">Agent 自动执行并提 PR</p>
+          <div class="mt-2.5 space-y-1.5 font-mono text-[11px] text-zinc-500">
+            <div class="flex items-center gap-1.5"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12M18 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M18 12H9"/></svg>feat/us-3-agent-pr</div>
+            <div class="flex items-center gap-1.5 text-amber-400"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>测试运行中 · 14/22</div>
+          </div>
+          <div class="mt-2.5 flex items-center gap-2 border-t border-ink-700 pt-2">
+            <span class="grid h-5 w-5 place-items-center rounded bg-emerald-500/15 text-emerald-400"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M9 8V5a3 3 0 0 1 6 0v3"/></svg></span>
+            <span class="text-xs text-zinc-400">agent-01</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-600">2m 12s</span>
+          </div>
+        </article>
+
+        <article class="card-shadow rounded-lg border border-ink-700 bg-ink-850 p-3">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-1</span>
+            <span class="flex items-center gap-1 text-[10px] text-accent"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-accent"></span>运行中</span>
+          </div>
+          <p class="text-sm text-zinc-100">看板与 Story 基础数据模型</p>
+          <div class="mt-2.5 space-y-1.5 font-mono text-[11px] text-zinc-500">
+            <div class="flex items-center gap-1.5"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12M18 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M18 12H9"/></svg>feat/us-1-board-model</div>
+            <div class="flex items-center gap-1.5 text-zinc-500"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-8M6 20v-4M18 20V8"/></svg>写代码中…</div>
+          </div>
+          <div class="mt-2.5 flex items-center gap-2 border-t border-ink-700 pt-2">
+            <span class="grid h-5 w-5 place-items-center rounded bg-emerald-500/15 text-emerald-400"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M9 8V5a3 3 0 0 1 6 0v3"/></svg></span>
+            <span class="text-xs text-zinc-400">agent-03</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-600">5m 40s</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 待验收 -->
+    <section class="flex flex-col rounded-xl border border-amber-500/20 bg-ink-900/50">
+      <div class="flex items-center justify-between px-3 py-2.5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-amber-500"></span><span class="text-sm font-medium text-zinc-200">待验收</span></div>
+        <span class="rounded-full bg-amber-500/15 px-1.5 text-xs text-amber-400">2</span>
+      </div>
+      <div class="flex flex-col gap-2 px-2 pb-2">
+        <article class="card-shadow cursor-pointer rounded-lg border border-amber-500/30 bg-ink-850 p-3 hover:border-amber-500/60" onclick="go('review')">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-4</span>
+            <span class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-400">PR #128</span>
+          </div>
+          <p class="text-sm text-zinc-100">人类验收闸门 · push 门禁</p>
+          <div class="mt-2.5 flex items-center gap-2 font-mono text-[11px] text-emerald-400">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>测试 22/22 通过 · +184 −20
+          </div>
+          <div class="mt-2.5 flex items-center gap-2 border-t border-ink-700 pt-2">
+            <span class="grid h-5 w-5 place-items-center rounded bg-emerald-500/15 text-emerald-400"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M9 8V5a3 3 0 0 1 6 0v3"/></svg></span>
+            <span class="text-xs text-zinc-400">agent-01</span>
+            <span class="ml-auto flex items-center gap-1 text-[10px] text-amber-400"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>push 已锁</span>
+          </div>
+        </article>
+
+        <article class="card-shadow cursor-pointer rounded-lg border border-ink-700 bg-ink-850 p-3 hover:border-amber-500/40" onclick="go('review')">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-2</span>
+            <span class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-400">PR #127</span>
+          </div>
+          <p class="text-sm text-zinc-100">把 Story 指派给 Agent</p>
+          <div class="mt-2.5 flex items-center gap-2 font-mono text-[11px] text-emerald-400">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>测试 16/16 通过 · +92 −8
+          </div>
+          <div class="mt-2.5 flex items-center gap-2 border-t border-ink-700 pt-2">
+            <span class="grid h-5 w-5 place-items-center rounded bg-emerald-500/15 text-emerald-400"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M9 8V5a3 3 0 0 1 6 0v3"/></svg></span>
+            <span class="text-xs text-zinc-400">agent-02</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 返工中 -->
+    <section class="flex flex-col rounded-xl border border-rose-500/20 bg-ink-900/50">
+      <div class="flex items-center justify-between px-3 py-2.5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-rose-500"></span><span class="text-sm font-medium text-zinc-200">返工中</span></div>
+        <span class="text-xs text-zinc-500">1</span>
+      </div>
+      <div class="flex flex-col gap-2 px-2 pb-2">
+        <article class="card-shadow rounded-lg border border-ink-700 bg-ink-850 p-3">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-7</span>
+            <span class="flex items-center gap-1 text-[10px] text-rose-400"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500"></span>带反馈重做</span>
+          </div>
+          <p class="text-sm text-zinc-100">认领锁:防多 agent 抢同一 story</p>
+          <div class="mt-2.5 rounded-md border border-rose-500/20 bg-rose-500/5 p-2 text-[11px] text-rose-300/90">
+            <span class="text-rose-400">打回:</span>并发认领仍有竞态,需加分布式锁
+          </div>
+          <div class="mt-2.5 flex items-center gap-2 border-t border-ink-700 pt-2">
+            <span class="grid h-5 w-5 place-items-center rounded bg-emerald-500/15 text-emerald-400"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M9 8V5a3 3 0 0 1 6 0v3"/></svg></span>
+            <span class="text-xs text-zinc-400">agent-04</span>
+            <span class="ml-auto font-mono text-[10px] text-zinc-600">第 2 次</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Done -->
+    <section class="flex flex-col rounded-xl border border-ink-700 bg-ink-900/50">
+      <div class="flex items-center justify-between px-3 py-2.5">
+        <div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500"></span><span class="text-sm font-medium text-zinc-200">Done</span></div>
+        <span class="text-xs text-zinc-500">1</span>
+      </div>
+      <div class="flex flex-col gap-2 px-2 pb-2">
+        <article class="card-shadow rounded-lg border border-ink-700 bg-ink-850/60 p-3">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-0</span>
+            <span class="flex items-center gap-1 text-[10px] text-emerald-400"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>已合并</span>
+          </div>
+          <p class="text-sm text-zinc-400 line-through decoration-zinc-600">项目脚手架 + CI</p>
+          <div class="mt-2.5 flex items-center gap-2 border-t border-ink-700 pt-2 text-xs text-zinc-500">
+            <span class="grid h-5 w-5 place-items-center rounded-full bg-zinc-600/40 text-[10px] text-zinc-300">Y</span>You · 人类验收 ✓
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- ============================================================= -->
+<!-- SCREEN 2 : ACCEPTANCE GATE / REVIEW                            -->
+<!-- ============================================================= -->
+<main id="tab-review" class="hidden">
+  <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr]">
+
+    <!-- 待验收队列 -->
+    <aside class="border-b border-ink-700 lg:border-b-0 lg:border-r lg:min-h-[calc(100dvh-3.5rem)]">
+      <div class="flex items-center justify-between px-4 py-3">
+        <h2 class="text-sm font-semibold text-white">验收队列</h2>
+        <span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-400">2 待处理</span>
+      </div>
+      <div class="space-y-1 px-2">
+        <button class="w-full rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-left">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-4 · PR #128</span>
+            <span class="font-mono text-[10px] text-zinc-600">now</span>
+          </div>
+          <p class="mt-1 text-sm text-zinc-100">人类验收闸门 · push 门禁</p>
+          <div class="mt-1.5 flex items-center gap-2 text-[11px] text-zinc-500">
+            <span class="text-emerald-400">✓ 22/22</span>·<span>agent-01</span>
+          </div>
+        </button>
+        <button class="w-full rounded-lg border border-ink-700 p-3 text-left hover:border-ink-600">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-[11px] text-zinc-500">US-2 · PR #127</span>
+            <span class="font-mono text-[10px] text-zinc-600">8m</span>
+          </div>
+          <p class="mt-1 text-sm text-zinc-300">把 Story 指派给 Agent</p>
+          <div class="mt-1.5 flex items-center gap-2 text-[11px] text-zinc-500">
+            <span class="text-emerald-400">✓ 16/16</span>·<span>agent-02</span>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <!-- 验收详情 -->
+    <section class="min-w-0">
+      <!-- 详情头 -->
+      <div class="flex flex-wrap items-center gap-3 border-b border-ink-700 px-5 py-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-semibold text-white">US-4 人类验收闸门</h2>
+            <span class="rounded bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-400">待验收</span>
+          </div>
+          <p class="mt-0.5 font-mono text-[11px] text-zinc-500">PR #128 · feat/us-4-approval-gate · agent-01</p>
+        </div>
+        <div class="ml-auto flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-1.5 text-[11px] text-amber-300">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          未验收 · push 被阻止
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-0 xl:grid-cols-[1fr_300px]">
+        <!-- 左:验收标准 + diff -->
+        <div class="min-w-0 border-b border-ink-700 xl:border-b-0 xl:border-r">
+          <!-- 验收标准勾选 -->
+          <div class="px-5 py-4">
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">验收标准(Gherkin)</h3>
+            <ul class="space-y-1.5 text-sm">
+              <li class="flex items-start gap-2"><span class="mt-0.5 grid h-4 w-4 place-items-center rounded bg-emerald-500/20 text-emerald-400"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg></span><span class="text-zinc-300">验收通过后,PR 才允许合并/push</span></li>
+              <li class="flex items-start gap-2"><span class="mt-0.5 grid h-4 w-4 place-items-center rounded bg-emerald-500/20 text-emerald-400"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg></span><span class="text-zinc-300">打回时 PR 被阻止 + story 退回带反馈</span></li>
+              <li class="flex items-start gap-2"><span class="mt-0.5 h-4 w-4 rounded border border-zinc-600"></span><span class="text-zinc-400">绕过门禁直接调 merge API 必须失败 <span class="text-zinc-600">— 待你确认</span></span></li>
+            </ul>
+          </div>
+
+          <!-- Diff -->
+          <div class="border-t border-ink-700">
+            <div class="flex items-center justify-between px-5 py-2.5 text-xs">
+              <span class="font-mono text-zinc-400">src/gate/approval.ts</span>
+              <span class="font-mono text-zinc-600"><span class="text-emerald-400">+184</span> <span class="text-rose-400">−20</span></span>
+            </div>
+            <pre class="overflow-x-auto px-2 pb-4 font-mono text-[12px] leading-relaxed text-zinc-300"><code><span class="block px-3 text-zinc-600">@@ guard merge before human approval @@</span>
+<span class="diff-add block px-3"><span class="text-emerald-500">+</span> export async function canMerge(storyId: string) {</span>
+<span class="diff-add block px-3"><span class="text-emerald-500">+</span>   const story = await getStory(storyId);</span>
+<span class="diff-add block px-3"><span class="text-emerald-500">+</span>   if (story.approval !== "approved") {</span>
+<span class="diff-add block px-3"><span class="text-emerald-500">+</span>     throw new GateError("push blocked: needs human approval");</span>
+<span class="diff-add block px-3"><span class="text-emerald-500">+</span>   }</span>
+<span class="diff-add block px-3"><span class="text-emerald-500">+</span>   return true;</span>
+<span class="diff-add block px-3"><span class="text-emerald-500">+</span> }</span>
+<span class="block px-3">  </span>
+<span class="diff-del block px-3"><span class="text-rose-500">−</span> // TODO: 旧逻辑直接 merge,无门禁</span>
+<span class="diff-del block px-3"><span class="text-rose-500">−</span> await git.merge(branch);</span></code></pre>
+          </div>
+        </div>
+
+        <!-- 右:agent 执行日志(可追溯) -->
+        <aside class="px-5 py-4">
+          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Agent 执行日志</h3>
+          <ol class="relative space-y-3 border-l border-ink-700 pl-4 text-[12px]">
+            <li><span class="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-accent"></span><p class="text-zinc-300">领取任务 · 建分支</p><p class="font-mono text-[10px] text-zinc-600">14:02:11</p></li>
+            <li><span class="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-accent"></span><p class="text-zinc-300">写代码 · 3 个文件</p><p class="font-mono text-[10px] text-zinc-600">14:03:40</p></li>
+            <li><span class="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-emerald-500"></span><p class="text-zinc-300">测试 22/22 通过</p><p class="font-mono text-[10px] text-zinc-600">14:05:02</p></li>
+            <li><span class="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-amber-500"></span><p class="text-zinc-300">开 PR #128 · 等待验收</p><p class="font-mono text-[10px] text-zinc-600">14:05:09</p></li>
+          </ol>
+        </aside>
+      </div>
+
+      <!-- 底部:验收操作(红线) -->
+      <div class="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-ink-700 bg-ink-900/90 px-5 py-3 backdrop-blur">
+        <p class="text-xs text-zinc-500">你的决定决定它是否"完成"。打回需填反馈。</p>
+        <div class="ml-auto flex items-center gap-2">
+          <button class="flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/5 px-3.5 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/10 active:scale-[.98]">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v6h6M21 21v-6h-6"/><path d="M21 8a9 9 0 0 0-15-3.5L3 9M3 16a9 9 0 0 0 15 3.5l3-4.5"/></svg>
+            打回 + 反馈
+          </button>
+          <button class="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-400 active:scale-[.98]">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg>
+            通过验收 · 解锁 push
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+  function go(tab){
+    document.getElementById('tab-board').classList.toggle('hidden', tab!=='board');
+    document.getElementById('tab-review').classList.toggle('hidden', tab!=='review');
+    document.querySelectorAll('.tabbtn').forEach(b=>b.dataset.active = (b.dataset.tab===tab));
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll('.tabbtn').forEach(b=> b.addEventListener('click', ()=>go(b.dataset.tab)));
+</script>
+</body>
+</html>

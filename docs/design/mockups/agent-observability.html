@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Helmsman — 多 Agent 可观测</title><script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{paper:{DEFAULT:'#f7f7f8',sub:'#fafafa'},line:'#e4e4e7',ink:{900:'#18181b',700:'#3f3f46',500:'#71717a',400:'#a1a1aa'},accent:{DEFAULT:'#4f7cff',soft:'#eef2ff',dim:'#3a5bd0'}},fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['ui-monospace','Menlo','monospace']}}}}</script>
+<style>body{background:#f7f7f8}.card-shadow{box-shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06)}</style></head>
+<body class="font-sans text-ink-700 antialiased">
+<header class="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-line bg-white/85 px-4 backdrop-blur">
+  <div class="flex items-center gap-2"><div class="grid h-7 w-7 place-items-center rounded-md bg-accent text-white"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 7v6c0 5 8 9 8 9s8-4 8-9V7l-8-5Z"/></svg></div><span class="text-sm font-semibold text-ink-900">Helmsman</span></div>
+  <nav class="flex items-center gap-1 text-sm"><span class="px-3 py-2 text-ink-500">工作台</span><span class="px-3 py-2 text-ink-500">Sprint 仪表盘</span><span class="relative px-3 py-2 text-ink-900 after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-accent">Agent 机群</span><span class="px-3 py-2 text-ink-500">验收闸门</span></nav>
+</header>
+
+<main class="grid grid-cols-1 lg:grid-cols-[1fr_320px]">
+  <!-- 左:机群列表 -->
+  <section class="px-4 py-5">
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+      <h1 class="text-lg font-semibold text-ink-900">Agent 机群 · 谁在做什么</h1>
+      <div class="flex items-center gap-3 text-xs text-ink-500">
+        <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-accent"></span>3 执行</span>
+        <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-ink-400"></span>1 空闲</span>
+        <span class="flex items-center gap-1 text-rose-600"><span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>1 异常</span>
+      </div>
+    </div>
+
+    <div class="overflow-hidden rounded-xl border border-line bg-white card-shadow">
+      <table class="w-full text-sm">
+        <thead><tr class="border-b border-line text-left text-[11px] uppercase tracking-wide text-ink-400">
+          <th class="px-4 py-2.5 font-medium">Agent</th><th class="px-4 py-2.5 font-medium">当前 story</th><th class="px-4 py-2.5 font-medium">累计</th><th class="px-4 py-2.5 font-medium">最近活动</th></tr></thead>
+        <tbody class="divide-y divide-line">
+          <tr class="cursor-pointer bg-accent-soft/40 hover:bg-paper-sub">
+            <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="grid h-6 w-6 place-items-center rounded bg-emerald-100 text-emerald-600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/></svg></span><span class="font-medium text-ink-900">agent-01</span><span class="flex items-center gap-1 rounded bg-accent-soft px-1.5 py-0.5 text-[10px] text-accent-dim"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-accent"></span>执行</span></div></td>
+            <td class="px-4 py-3 text-ink-700">US-4 人类验收闸门</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-500">6 领 · 5 过 · 1 退</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-400">提 PR · 2m 前</td></tr>
+          <tr class="cursor-pointer hover:bg-paper-sub">
+            <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="grid h-6 w-6 place-items-center rounded bg-emerald-100 text-emerald-600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/></svg></span><span class="font-medium text-ink-900">agent-02</span><span class="flex items-center gap-1 rounded bg-accent-soft px-1.5 py-0.5 text-[10px] text-accent-dim"><span class="h-1.5 w-1.5 rounded-full bg-accent"></span>执行</span></div></td>
+            <td class="px-4 py-3 text-ink-700">US-2 指派给 Agent</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-500">4 领 · 3 过 · 0 退</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-400">写代码 · 5m 前</td></tr>
+          <tr class="cursor-pointer hover:bg-paper-sub">
+            <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="grid h-6 w-6 place-items-center rounded bg-emerald-100 text-emerald-600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/></svg></span><span class="font-medium text-ink-900">agent-03</span><span class="flex items-center gap-1 rounded bg-accent-soft px-1.5 py-0.5 text-[10px] text-accent-dim"><span class="h-1.5 w-1.5 rounded-full bg-accent"></span>执行</span></div></td>
+            <td class="px-4 py-3 text-ink-700">US-1 看板数据模型</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-500">3 领 · 2 过 · 0 退</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-400">领取 · 8m 前</td></tr>
+          <tr class="cursor-pointer bg-rose-50/40 hover:bg-rose-50">
+            <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="grid h-6 w-6 place-items-center rounded bg-emerald-100 text-emerald-600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/></svg></span><span class="font-medium text-ink-900">agent-04</span><span class="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-600"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500"></span>异常</span></div></td>
+            <td class="px-4 py-3 text-rose-700">US-7 认领锁 · 被打回 ×2</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-500">2 领 · 0 过 · 2 退</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-rose-500">打回 · 12m 前</td></tr>
+          <tr class="cursor-pointer hover:bg-paper-sub opacity-70">
+            <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="grid h-6 w-6 place-items-center rounded bg-zinc-100 text-ink-400"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/></svg></span><span class="font-medium text-ink-700">agent-05</span><span class="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-ink-500">空闲</span></div></td>
+            <td class="px-4 py-3 text-ink-400">—</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-400">0 领</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-ink-400">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-2 text-[11px] text-ink-400">数据来自真实 Task/TaskUpdate 聚合。「执行/空闲」按最近活动推导;真实在线心跳留待接入真实 agent。</p>
+  </section>
+
+  <!-- 右:单 agent 活动流(点击 agent-01) -->
+  <aside class="border-t border-line lg:border-l lg:border-t-0">
+    <div class="flex items-center gap-2 border-b border-line px-4 py-3"><span class="grid h-6 w-6 place-items-center rounded bg-emerald-100 text-emerald-600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/></svg></span><h2 class="text-sm font-semibold text-ink-900">agent-01 活动流</h2></div>
+    <ol class="relative space-y-3 border-l border-line px-4 py-4 pl-6 text-[12px]">
+      <li><span class="absolute -left-[4px] mt-1 h-2 w-2 rounded-full bg-amber-500"></span><p class="text-ink-700">提 PR #128 · US-4</p><p class="font-mono text-[10px] text-ink-400">14:05</p></li>
+      <li><span class="absolute -left-[4px] mt-1 h-2 w-2 rounded-full bg-emerald-500"></span><p class="text-ink-700">测试 22/22 通过</p><p class="font-mono text-[10px] text-ink-400">14:05</p></li>
+      <li><span class="absolute -left-[4px] mt-1 h-2 w-2 rounded-full bg-accent"></span><p class="text-ink-700">写代码 3 文件 · US-4</p><p class="font-mono text-[10px] text-ink-400">14:03</p></li>
+      <li><span class="absolute -left-[4px] mt-1 h-2 w-2 rounded-full bg-rose-500"></span><p class="text-ink-700">被打回 · US-7 并发竞态</p><p class="font-mono text-[10px] text-ink-400">13:48</p></li>
+      <li><span class="absolute -left-[4px] mt-1 h-2 w-2 rounded-full bg-accent"></span><p class="text-ink-700">领取 US-4</p><p class="font-mono text-[10px] text-ink-400">13:30</p></li>
+    </ol>
+  </aside>
+</main>
+</body></html>

@@ -1,0 +1,32 @@
+{
+  "sprint": {
+    "name": "Sprint N - 简短主题",
+    "goal": "一句话本 Sprint 目标",
+    "startDate": "2026-06-18",
+    "endDate": "2026-06-25"
+  },
+  "epics": [
+    {
+      "code": "E3",
+      "title": "Epic 标题",
+      "value": "为什么有价值",
+      "priority": "P0",
+      "targetSprint": "S2"
+    }
+  ],
+  "stories": [
+    {
+      "code": "US-9",
+      "epic": "E3",
+      "title": "一句话标题",
+      "priority": "P1",
+      "userStory": "作为 <角色>, 我想要 <动作>, 以便于 <价值>",
+      "acceptanceCriteria": "Given <前置>\nWhen <动作>\nThen <预期>",
+      "tasks": [
+        "[BE] 后端任务",
+        "[FE] 前端任务",
+        "[TEST] 🛡 守护/边界测试"
+      ]
+    }
+  ]
+}

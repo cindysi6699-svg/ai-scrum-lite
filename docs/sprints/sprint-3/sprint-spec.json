@@ -1,0 +1,69 @@
+{
+  "sprint": {
+    "name": "Sprint 3 - 红线走骨架",
+    "goal": "把产品红线「人类批准前不许合并」做成真的:由 GitHub 分支保护 + commit status(helmsman/human-approval)在服务端强制;agent 的 PR 先用脚本伪造来打通整条红线,绕过必败。",
+    "startDate": "2026-06-25",
+    "endDate": "2026-07-02"
+  },
+  "epics": [
+    { "code": "E7", "title": "GitHub 红线闭环(人审前不许合并)", "value": "核心产品承诺 / 红线", "priority": "P0", "targetSprint": "S3" }
+  ],
+  "stories": [
+    {
+      "code": "US-13",
+      "epic": "E7",
+      "title": "待验收即挂合并锁(PR 接入 + commit status pending)",
+      "priority": "P0",
+      "userStory": "作为 Lead, 我想要 agent 一提 PR 就自动被挂上「待人批」的合并锁, 以便于 没有我的批准谁也合不了",
+      "acceptanceCriteria": "Given 一个带关联 PR 的任务进入「待验收」\nWhen 系统处理这次流转\nThen 在该 PR 的 head commit 上写 commit status `helmsman/human-approval` = pending(description 说明「待人类二次验收」)\nAnd 因 agent-sandbox 分支保护已 require 这个 status,该 PR 在 GitHub 上显示为「无法合并(等待 helmsman/human-approval)」\nAnd GithubRef 落库:PR url / head sha / 当前红线状态(pending)\nAnd 看板卡片与 US-9 详情抽屉「关联 PR」区显示「合并已锁(待批)」\nAnd 全程只用 Commit statuses 权限(token 不含 Checks/Administration),验证 PAT 即可完成",
+      "tasks": [
+        "[INFRA] agent-sandbox PR 伪造器(scripts/agent-pr.mjs):拉 agent/US-xx-* 分支 → 平凡改动 → 开真 PR(base=agent-sandbox)→ 写 GithubRef → 把任务移「待验收」并指派 agent-02,模拟真 agent 为红线提供被测 PR",
+        "[BE] GitHub 客户端封装:用 GITHUB_TOKEN 调 Commit statuses API,在 PR head SHA 上写 helmsman/human-approval=pending(失败要冒泡,不静默)",
+        "[BE] 任务进「待验收」时触发挂 pending;GithubRef 增字段存 head sha + 红线状态(含 prisma migration,打在隔离库)",
+        "[FE] 看板卡片 + US-9 详情抽屉「关联 PR」展示合并锁状态(已锁/待批),复用现有抽屉,遵循 DESIGN-SPEC 弹层规范(z 层级 / max-h / 内部滚动 / 防误关丢输入)",
+        "[TEST] 🛡 集成断言:挂 pending 后调 GitHub 查该 PR,mergeable_state=blocked(分支保护确实生效)"
+      ]
+    },
+    {
+      "code": "US-14",
+      "epic": "E7",
+      "title": "通过验收 → 解锁合并",
+      "priority": "P0",
+      "userStory": "作为 Lead, 我想要 点「通过验收」后这条红线自动解锁, 以便于 我批准的 PR 立刻可以合并",
+      "acceptanceCriteria": "Given 一个待验收任务,其 PR 上 helmsman/human-approval=pending\nWhen 我(已登录的人类成员)点击「通过验收」\nThen 服务端把该 PR head commit 的 commit status 置为 success\nAnd 该 PR 在 GitHub 上变为可合并(mergeable_state=clean)\nAnd 任务原地流转到 done(in-place,不删卡重建)并写 TaskUpdate(previous→done、actor=该人类)\nAnd 写一条 Decision(通过 + 可选反馈)\nAnd 若 GitHub 置 status 失败,则任务不进 done 且给出明确错误(不静默吞)\nAnd 卡片/抽屉显示「合并已解锁(已批准 · <人名>)」",
+      "tasks": [
+        "[BE] reviewTaskAction 通过分支:先置 commit status=success → 成功后任务 in-place 转 done + TaskUpdate + Decision(在现有 approve 上叠加 GitHub 调用,保留 optionalText 修复)",
+        "[BE] 失败补偿:GitHub 调用失败则不流转、回传错误,保证「看板已 done 但 PR 没解锁」不会发生",
+        "[FE] 通过后卡片/抽屉展示「已解锁 + 批准人」",
+        "[TEST] 🛡 集成断言:approve 后该 PR mergeable_state=clean,且看板任务=done(同一张卡,id 不变)"
+      ]
+    },
+    {
+      "code": "US-15",
+      "epic": "E7",
+      "title": "打回 → 合并锁不松",
+      "priority": "P1",
+      "userStory": "作为 Lead, 我想要 打回时合并锁绝不松开, 以便于 没改好的东西不可能被合进去",
+      "acceptanceCriteria": "Given 一个待验收任务,PR 上 status=pending\nWhen 我点击「打回」并填反馈\nThen commit status 置为 failure,PR 仍不可合并(mergeable_state=blocked)\nAnd 任务原地回到 in_progress 并指派回 agent-01,写 TaskUpdate + Decision(打回 + 反馈)\nAnd 卡片/抽屉显示「已打回,合并仍锁」",
+      "tasks": [
+        "[BE] reviewTaskAction 打回分支:置 commit status=failure + 任务 in-place 回 in_progress + 指派 agent-01 + TaskUpdate + Decision(反馈)",
+        "[FE] 打回后卡片/抽屉状态展示(已打回 / 合并仍锁)",
+        "[TEST] 🛡 集成断言:打回后该 PR 仍 mergeable_state=blocked"
+      ]
+    },
+    {
+      "code": "US-16",
+      "epic": "E7",
+      "title": "绕过必败(红线安全保证)",
+      "priority": "P0",
+      "userStory": "作为 Lead, 我想要 任何绕过我批准去合并的路径都失败, 以便于 红线不是 UI 摆设而是真约束",
+      "acceptanceCriteria": "Given 红线机制已上线\nWhen 在没有 success 状态时尝试合并该 PR(直接调 merge API)\nThen GitHub 因 required status 未满足而拒绝合并(分支保护强制,服务端不背锅)\nAnd 只有已认证的人类成员能触发 status=success:翻 success 的代码路径只在人类 approve action 里、且校验 session 为人类成员\nAnd agent / PR 伪造器的执行路径不调用置 success 的函数,无法自批\nAnd 分支保护勾选 include administrators(或 token 非 admin),管理员也不能绕\nAnd e2e/脚本断言:未批准时 merge 被拒、agent 路径翻不动 success",
+      "tasks": [
+        "[SECURITY] 翻 commit status=success 的函数仅由人类 approve action 调用,入口校验 session 为人类成员;worker/agent 代码路径与之隔离,绝不引用",
+        "[TEST] 🛡 未批准直接调 merge API → 被 GitHub 拒(分支保护 required status)",
+        "[TEST] 🛡 走 worker/agent 路径尝试翻 success → 失败/无此路径",
+        "[INFRA] 把分支保护配置(require helmsman/human-approval + include administrators)与 token 最小权限写进 docs/GITHUB-INTEGRATION.md"
+      ]
+    }
+  ]
+}

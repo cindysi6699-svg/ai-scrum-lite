@@ -1,0 +1,68 @@
+{
+  "sprint": {
+    "name": "Sprint 2 - 掌舵看得清",
+    "goal": "让 Lead 看清每条 story 的来龙去脉、看清所有 agent 在做什么,并能管理多个 Sprint 的生命周期;顺带补齐看板拖拽。",
+    "startDate": "2026-06-18",
+    "endDate": "2026-06-25"
+  },
+  "epics": [
+    { "code": "E1", "title": "核心 Scrum 看板", "value": "协作底座", "priority": "P0", "targetSprint": "S2" },
+    { "code": "E6", "title": "多 Agent 可观测面板", "value": "第 1 痛点 / 核心差异化", "priority": "P0", "targetSprint": "S2" }
+  ],
+  "stories": [
+    {
+      "code": "US-9",
+      "epic": "E1",
+      "title": "Story 详情查看(右侧只读抽屉)",
+      "priority": "P0",
+      "userStory": "作为 Lead, 我想要 点开一条 story 看到它的完整信息和历史, 以便于 掌握来龙去脉并做验收判断",
+      "acceptanceCriteria": "Given 看板/Backlog 上的一条 story\nWhen 我点击它\nThen 从右侧滑出只读详情抽屉,显示 标题/用户故事/验收标准/优先级/负责人/当前状态\nAnd 显示状态变更历史时间线(谁、何时、从哪列到哪列、进度备注)\nAnd 显示关联 PR 与审批记录(通过/打回 + 反馈)\nAnd 抽屉为只读;点左侧遮罩 / 按 Esc / 点右上角 X 都可关闭\nAnd 关闭后回到原视图,不丢所选 sprint / 当前视图(?sprint/?view 保留)\nAnd 内容超长时抽屉内部滚动,头部固定(遵循 DESIGN-SPEC 弹层规范)",
+      "tasks": [
+        "右侧只读详情抽屉:从右滑入;点遮罩/Esc/X 关闭(只读,无输入保护需求)",
+        "渲染 story 全字段 + 验收标准;头部固定、正文内部滚动",
+        "状态历史时间线(来自 TaskUpdate:actor/时间/流转/进度)",
+        "关联 PR(GithubRef)与审批记录(Decision)展示",
+        "看板/Backlog 卡片点击 → 打开详情,保留 ?sprint/?view"
+      ]
+    },
+    {
+      "code": "US-10",
+      "epic": "E6",
+      "title": "多 Agent 可观测面板(首切片)",
+      "priority": "P0",
+      "userStory": "作为 Lead, 我想要 一个面板看到所有 agent 在做什么、卡在哪, 以便于 多 agent 并行时不抓瞎",
+      "acceptanceCriteria": "Given 项目里有多个 agent\nWhen 我打开「Agent 机群」面板\nThen 列出每个 agent:状态(执行/空闲/异常)、当前 story、累计(领取/提 PR/被打回 数)\nAnd 异常/被打回的 agent 明显标红\nAnd 点某个 agent 可看它的活动流(按该 agent 过滤的 TaskUpdate 时间线)\nAnd 所有数据来自真实 Task/TaskUpdate 聚合,不是写死的 mock\nAnd 「在线/空闲」按最近活动推导(真实心跳留待后续接入真实 agent)",
+      "tasks": [
+        "Agent 机群面板:每个 agent 一行(状态、当前 story、计数)",
+        "真实数据聚合:按 assignee 聚合 Task + TaskUpdate",
+        "单 agent 活动流:过滤该 agent 的 TaskUpdate 时间线",
+        "顶栏「Agent 机群」入口接到此面板(替换现在的静态条)"
+      ]
+    },
+    {
+      "code": "US-11",
+      "epic": "E1",
+      "title": "Sprint 生命周期页",
+      "priority": "P1",
+      "userStory": "作为 Lead, 我想要 一个 Sprint 列表页管理所有 Sprint, 以便于 规划/关闭/归档/回看历史 Sprint",
+      "acceptanceCriteria": "Given 项目有多个 Sprint\nWhen 我打开 Sprint 列表页\nThen 列出所有 Sprint:名称/目标/起止/状态(规划/进行/关闭)/进度\nAnd 我能关闭或归档一个 Sprint,或把规划中的设为 active\nAnd 同一时刻只能有一个 active Sprint\nAnd 点列表项进入该 Sprint 看板(?sprint=<id>)\nAnd 已关闭的历史 Sprint 只读回看,不影响当前",
+      "tasks": [
+        "Sprint 列表页:全部 sprint + 元信息 + 状态 + 进度",
+        "生命周期操作:关闭 / 归档 / 激活(保证唯一 active)",
+        "列表项 → 进入该 sprint 看板(复用 US-8 的 ?sprint 与导入,不重复造)"
+      ]
+    },
+    {
+      "code": "US-12",
+      "epic": "E1",
+      "title": "看板拖拽流转(补 Sprint 1)",
+      "priority": "P1",
+      "userStory": "作为 Lead, 我想要 在看板上拖拽卡片改状态, 以便于 比点按钮更直接地推进",
+      "acceptanceCriteria": "Given 看板上的一张卡\nWhen 我把它拖到另一列\nThen 状态相应更新并留痕(TaskUpdate)\nAnd 非法流转被拒(如跳过「待验收」直达 Done、未验收强行 Done),给出提示并回弹\nAnd 拖拽不破坏既有按钮/表单路径",
+      "tasks": [
+        "看板卡片列间拖拽 + 落库更新状态",
+        "非法流转拦截 + 回弹提示(复用现有状态机规则)"
+      ]
+    }
+  ]
+}

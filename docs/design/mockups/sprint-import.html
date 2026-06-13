@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Helmsman — Sprint 菜单(切换 + 导入)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: {
+      paper:{ DEFAULT:'#f7f7f8', card:'#ffffff', sub:'#fafafa' },
+      line:{ DEFAULT:'#e4e4e7' }, ink:{ 900:'#18181b', 700:'#3f3f46', 500:'#71717a', 400:'#a1a1aa' },
+      accent:{ DEFAULT:'#4f7cff', soft:'#eef2ff', dim:'#3a5bd0' },
+    },
+    fontFamily:{ sans:['Inter','ui-sans-serif','system-ui','sans-serif'], mono:['ui-monospace','"JetBrains Mono"','Menlo','monospace'] },
+  }}}
+</script>
+<style>
+  body{ background:#f7f7f8; }
+  .card-shadow{ box-shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06); }
+  .menu-shadow{ box-shadow:0 12px 32px -8px rgba(16,24,40,.22); }
+  .modal-shadow{ box-shadow:0 24px 60px -12px rgba(16,24,40,.28); }
+  .ta{ width:100%; border:1px solid #e4e4e7; border-radius:8px; background:#fff; padding:.6rem .7rem; font-size:12px; line-height:1.6; color:#18181b; outline:none; }
+  .ta:focus{ border-color:#4f7cff; box-shadow:0 0 0 3px rgba(79,124,255,.15); }
+</style>
+</head>
+<body class="font-sans text-ink-700 antialiased">
+
+<!-- ============ 1) 头部:Sprint 菜单(下拉打开态) ============ -->
+<section class="border-b border-line bg-white px-4 py-3">
+  <p class="mb-2 text-[11px] font-medium uppercase tracking-wide text-ink-400">① 头部 Sprint 菜单(下拉打开态)</p>
+  <div class="relative inline-block">
+    <!-- 触发按钮 -->
+    <button class="flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink-700">
+      <span class="text-ink-400">Sprint</span>
+      <span class="font-medium text-ink-900">Sprint 1 - Walking Skeleton</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <!-- 下拉菜单 -->
+    <div class="menu-shadow absolute left-0 top-full z-10 mt-1 w-72 overflow-hidden rounded-xl border border-line bg-white py-1">
+      <p class="px-3 py-1.5 text-[10px] uppercase tracking-wide text-ink-400">切换 Sprint</p>
+      <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-paper-sub">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-accent"><path d="m20 6-11 11-5-5"/></svg>
+        <span class="flex-1 text-ink-900">Sprint 1 - Walking Skeleton</span>
+        <span class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">active</span>
+      </button>
+      <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-paper-sub">
+        <span class="w-3.5"></span>
+        <span class="flex-1 text-ink-700">Sprint 0 - 脚手架 + CI</span>
+        <span class="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-ink-500">done</span>
+      </button>
+      <div class="my-1 border-t border-line"></div>
+      <!-- 导入入口(同时也是"新建 Sprint") -->
+      <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent-dim hover:bg-accent-soft">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        导入 / 新建 Sprint
+      </button>
+    </div>
+  </div>
+  <p class="mt-24 text-[11px] text-ink-400">注:只有 1 个 Sprint 时,"切换"区只列出当前这一个(高亮 active);「导入 / 新建 Sprint」始终可用 → 控件不会变成"死下拉"。</p>
+</section>
+
+<!-- ============ 2) 导入弹窗 ============ -->
+<section class="px-4 py-4">
+  <p class="mb-3 text-[11px] font-medium uppercase tracking-wide text-ink-400">② 导入 Sprint 弹窗</p>
+
+  <div class="relative mx-auto max-w-[560px]">
+    <div class="modal-shadow overflow-hidden rounded-2xl border border-line bg-white">
+      <!-- header -->
+      <div class="flex items-center justify-between border-b border-line px-5 py-3.5">
+        <div class="flex items-center gap-2">
+          <span class="grid h-6 w-6 place-items-center rounded-md bg-accent-soft text-accent-dim"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg></span>
+          <h2 class="text-sm font-semibold text-ink-900">导入 Sprint</h2>
+        </div>
+        <button class="grid h-7 w-7 place-items-center rounded-md text-ink-400 hover:bg-paper-sub"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+
+      <!-- body -->
+      <div class="space-y-3 px-5 py-4">
+        <!-- 来源切换 -->
+        <div class="flex items-center justify-between">
+          <div class="inline-flex rounded-lg border border-line bg-white p-0.5 text-xs">
+            <button class="rounded-md bg-accent px-2.5 py-1 font-medium text-white">粘贴 JSON</button>
+            <button class="rounded-md px-2.5 py-1 text-ink-500 hover:text-ink-900">上传 .json</button>
+          </div>
+          <a class="text-[11px] text-accent-dim hover:underline" href="#">查看 Sprint Spec 格式 ↗</a>
+        </div>
+
+        <!-- JSON 输入 -->
+        <textarea class="ta font-mono min-h-[200px] resize-y" placeholder='{
+  "sprint": { "name": "Sprint 2 - 闭环加固", "goal": "...", "startDate": "2026-06-18", "endDate": "2026-06-25" },
+  "epics": [ { "code": "E3", "title": "...", "priority": "P0", "targetSprint": "S2" } ],
+  "stories": [
+    { "code": "US-9", "epic": "E3", "title": "...", "priority": "P1",
+      "userStory": "作为 ..., 我想要 ..., 以便于 ...",
+      "acceptanceCriteria": "Given ...\nWhen ...\nThen ...",
+      "tasks": ["[BE] ...", "[FE] ...", "[TEST] 🛡 ..."] }
+  ]
+}'></textarea>
+
+        <!-- 校验结果:成功态(示例) -->
+        <div class="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mt-0.5 shrink-0"><path d="m20 6-11 11-5-5"/></svg>
+          <span><span class="font-medium">校验通过</span> · Sprint 2 - 闭环加固 · 1 epic · 1 story · 3 tasks,将创建为新的 active Sprint。</span>
+        </div>
+
+        <!-- 校验结果:错误态(示例,实现时二选一显示) -->
+        <div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+          <p class="mb-1 flex items-center gap-1.5 font-medium"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>校验失败(2)</p>
+          <ul class="list-disc space-y-0.5 pl-5 text-rose-600/90">
+            <li><span class="font-mono">stories[0].acceptanceCriteria</span> 缺失</li>
+            <li><span class="font-mono">sprint.endDate</span> 不是合法日期</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- footer -->
+      <div class="flex items-center justify-end gap-2 border-t border-line bg-paper-sub px-5 py-3">
+        <button class="rounded-lg px-3.5 py-2 text-sm text-ink-600 hover:bg-zinc-100">取消</button>
+        <button class="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-dim">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>导入并切换过去
+        </button>
+      </div>
+      <!-- 提交 → importSprintAction(spec):zod 校验 → 事务创建 Sprint+Epics+Stories+Tasks → 跳 ?sprint=<newId> -->
+    </div>
+  </div>
+
+  <p class="mx-auto mt-3 max-w-[560px] text-[11px] text-ink-400">
+    交互状态:① 默认(空 textarea,导入按钮禁用)② 校验失败(rose 列出字段错误,按钮禁用)③ 校验通过(emerald 摘要,按钮可用)④ 导入中(按钮 loading)⑤ 成功(关闭弹窗,跳到新 Sprint)。
+  </p>
+</section>
+
+</body>
+</html>
