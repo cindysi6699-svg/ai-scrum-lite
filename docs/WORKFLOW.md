@@ -151,7 +151,7 @@
 - 合 main = 部署生产。若改动含 **prisma migration**,**必须先对生产库 `set -a; source .env.local; set +a; pnpm prisma migrate deploy`,再 push main**——否则部署后的新代码查不到新列会崩(加列是可空、向后兼容,可安全先迁)。
 - 生产红线要真生效,需在 **Vercel 配 `GITHUB_TOKEN`**(`GITHUB_REPOSITORY` 有默认值,可不配)。不配不崩,只是生产里翻 GitHub 状态会失败。
 
-**当前状态(2026-06-14 交接)**:`main` 已含 Sprint 1–3(代码 + 文档),生产库 migration 已应用;仅 `main` + `agent-sandbox` 两个分支。⏳ 待办:Vercel 配 `GITHUB_TOKEN`。
+**当前状态(2026-06-14 重整)**:三分支 `main`(生产)/ `dev`(开发测试)/ `agent-sandbox`(agent PR 基线);两库 生产 `ep-green-dawn` / dev `ep-holy-breeze`。**完整的环境/分支/数据库对应关系见 [`ENVIRONMENTS.md`](ENVIRONMENTS.md)**(交接文档)。非生产页面有 🧪 横幅(`HELMSMAN_ENV`)。
 
 ---
 
