@@ -9,7 +9,9 @@
 
 > 让一个小团队的 Lead 能把 user story 派发给多个 AI agent,agent 自动开分支/写码/测/提 PR 并回填看板;**所有产出必须经人类验收才能 push**,且 Lead 始终能一眼看清"哪个 agent 在做什么、卡在哪"。
 
-**Sprint 1 目标(walking skeleton):** 跑通**单 agent 的完整闭环**——派发一个 story → agent 干活提 PR → 人类验收/打回 → 看板状态自动更新。先证明这条命脉走得通,再上规模。
+> **北极星愿景**:完整产品定位见 `PRD.md`(AI 交付控制平面;对象模型 Story / Agent Run / Evidence / Gate / Release;两层红线)。本 backlog = 落地优先级 + story 事实来源。
+>
+> **进展(2026-06)**:✅ **S1–S3 已交付**——看板、agent 成员、可观测 v1、**人审红线(服务端 + GitHub 分支保护强制)**。下一步 **S4 = 真 agent 自动执行**(make-or-break)。MVP 目标不变,已交付不返工。
 
 ---
 
@@ -17,19 +19,23 @@
 
 优先级依据 = 用户访谈已验证的两大痛点:**① 多 agent 可观测性 ② 派发→验收闭环**。
 
-| # | Epic | 价值 | 优先级 | 目标 Sprint |
-|---|------|------|--------|------------|
-| **E1** | 核心 Scrum 看板(backlog / sprint / story / 看板列) | 协作底座 | Must | S1 |
-| **E2** | Agent 作为一等成员(注册 agent、把 story 指派给 agent) | 核心差异化 | Must | S1 |
-| **E3** | Agent 执行流水线(领取→分支→写码→跑测→提 PR) | 核心差异化 | Must | S1–S2 |
-| **E4** | 状态自动回填(agent 活动 → 看板列) | 消灭手工回填 | Must | S2 |
-| **E5** | 人类审批闸门(验收队列、通过/打回+反馈、返工循环) | **红线**,质量掌舵权 | Must | S1–S2 |
-| **E6** | 多 agent 可观测面板("谁在做什么、卡在哪") | **第 1 痛点** | Should | S3 |
-| **E7** | 反馈返工闭环增强(打回原因结构化、agent 带反馈重做) | 提效 | Could | S3+ |
+| # | Epic | 价值 | 优先级 | 状态 |
+|---|------|------|--------|------|
+| **E1** | 核心 Scrum 看板(backlog / sprint / story / 看板列) | 协作底座 | Must | ✅ S1–S2 交付 |
+| **E2** | Agent 作为一等成员(注册 agent、指派 story) | 核心差异化 | Must | ✅ S1 交付 |
+| **E3** | Agent 执行流水线(领取→分支→写码→跑测→提 PR) | 核心差异化 | Must | 🟡 看板表达已交付;**真自动执行 = S4** |
+| **E4** | 状态自动回填(agent 活动 → 看板列) | 消灭手工回填 | Must | ✅ S1–S2 交付 |
+| **E5** | 人类审批闸门 / **红线 1**(验收、通过/打回、返工) | 质量掌舵权 | Must | ✅ S1 雏形 → **S3 服务端+GitHub 强制** |
+| **E6** | 多 agent 可观测面板("谁在做什么、卡在哪") | **第 1 痛点** | Should | ✅ S2 首切片交付 |
+| **E7** | 反馈返工闭环增强(打回原因结构化、带反馈重做) | 提效 | Could | ⚪ 未做 |
+| **E8** | **Agent Run & 成本/Token 可观测**(模型/prompt/log/token/成本/成功率) | **最强差异化** | Must | ⚪ S5 |
+| **E9** | **Evidence registry**(diff/CI log/测试/AI review/人审 沉淀为可追溯证据) | 可信交付 | Should | ⚪ S5 |
+| **E10** | **CI 证据门 + 自动修复回路**(Actions 作 required checks、CI 失败 agent 修) | 质量门做全 | Should | ⚪ S6 |
+| **E11** | **发布治理 / 红线 2**(release readiness、flag、灰度、监控、回滚) | 生产风险控制 | **延后·优先集成外部** | ⚪ post-MVP |
 
 ---
 
-## 3. Sprint 1 — User Stories(Cohn + Gherkin)
+## 3. Sprint 1 — User Stories(Cohn + Gherkin) · ✅ 已交付(存档)
 
 **Sprint 1 Goal:** 单 agent 跑通 派发→PR→人类验收→状态更新 的闭环。
 
@@ -148,14 +154,21 @@ Scenario: agent 进度驱动看板
 
 ---
 
-## 4. Roadmap(发布切片)
+## 4. Roadmap(riskiest-first 重排版 · 2026-06-14,详见 PRD §6.5)
 
-| 发布 | 范围 | 验证目标 |
+> 重排原则:**真 agent 先打 → 差异化(Evidence/成本)提前 → 外部验证并行 → 发布治理延后。** MVP 目标不变,S1–S3 不返工。
+
+| 阶段 | 范围 | 状态 / 目标 |
 |------|------|----------|
-| **R1 – Walking Skeleton(S1)** | US-1..5,单 agent 闭环 | 核心循环走得通吗? |
-| **R2 – 闭环加固(S2)** | E3/E4/E5 完整化,返工循环可用 | agent 产出质量 + 验收体验 |
-| **R3 – 规模化可观测(S3)** | E6 多 agent 面板 + E7 结构化反馈 | 解决「10 个 agent 不知道谁干啥」 |
-| **R4 – 小团队 GTM(S4+)** | 多人协作、权限、定价 | 付费意愿 |
+| **S1 Walking Skeleton** | US-1..5 单 agent 闭环 | ✅ 已交付 |
+| **S2 掌舵看得清** | US-8..12(导入/详情抽屉/多agent可观测/生命周期/拖拽) | ✅ 已交付 |
+| **S3 红线走骨架** | US-13..16 人审红线服务端+GitHub 强制 | ✅ 已交付 |
+| **S4 真 agent 自动执行** | E3 真执行:领活→workspace→写真码→真 PR→回填(接 S3 红线) | ⬅ **下一步,make-or-break** |
+| **S5 Evidence + 成本/Token 观测** | E8 + E9;**MVP 在此闭合** | 最强差异化 |
+| 🔬 **外部验证 probe(贯穿 S4–S5)** | 3+ 外部 Lead 看 demo/访谈 | 验证 gate 建造,不等 v1 |
+| **S6 CI 证据门 + QA 升级** | E10;CI 绿 + QA pass + 人审 三门齐 | 补"只强制人审"的缺口 |
+| **⏸ 发布治理 / 红线 2** | E11 | 延后 + 优先集成外部,不进 MVP |
+| **v1 团队化与商业化** | 多仓库 GitHub App、RBAC、usage/cost、按席位定价 | 由外部验证放行 |
 
 ---
 
@@ -178,7 +191,7 @@ Scenario: agent 进度驱动看板
 
 ---
 
-## 7. Sprint 2 候选(已记录,暂不展开)
+## 7. GitHub 正式接入 · ✅ 已于 S3 交付(存档,详见 `GITHUB-INTEGRATION.md`)
 
 - **GitHub 正式接入**(横跨 E3 执行流水线 + E5 审批闸门):
   - MVP 期先用 fine-grained PAT + 单测试仓库跑通闭环;产品化换 **GitHub App**(多租户、自助安装、webhook)。
@@ -188,7 +201,7 @@ Scenario: agent 进度驱动看板
 
 ---
 
-## 8. 下一步开发(Sprint 2 起步,先行 story)
+## 8. Sprint 2 起步 story — US-8 · ✅ 已交付(存档)
 
 ### US-8(重写)Sprint 菜单:切换 + 导入(E1 · P0)
 > 背景:之前的纯"切换器下拉"Codex 两次未实现。重写为**一个 Sprint 菜单**同时解决"切换历史 Sprint"和"导入/新建 Sprint",并附**设计稿**:`docs/design/mockups/sprint-import.html`。
@@ -223,3 +236,16 @@ Scenario: 导入校验失败
 - [ ] `[BE]` `importSprintAction(spec)`:**zod 校验** → 事务创建 Sprint+Epics+Stories+Tasks → 返回 newSprintId(复用 seed-sprint1 落库逻辑)
 - [ ] `[TEST]` 🛡 非法/越权 sprintId 回退默认;导入非法 JSON 整体回滚、内联报错;成功后跳新 Sprint
 - [ ] `[TEST]` 复用 `pnpm seed:e2e && seed:sprint1` 后,e2e 覆盖:切换 + 导入一个最小 Spec
+
+---
+
+## 9. 下一步:S4 — 真 agent 自动执行(候选 story,riskiest-first)
+
+> 目标:让**真 agent(非 `agent-pr.mjs` 模拟器)**端到端闭环——证明 MVP 核心承诺真能跑。接上 S3 已建的红线挂锁。详细 Cohn+Gherkin 待 S4 Planning 展开;运行时选型(轻量自管编排 vs Managed Agents)开 S4 时拍板(见 PRD §10)。
+
+- **US-17(E3)Agent 领活 + workspace**:真 agent 监听分配给它的 todo 任务 → 拿到隔离 workspace/worktree + 任务上下文 → 开分支,回写看板(in_progress + 活动流)。
+- **US-18(E3)Agent 写码 + 开真 PR**:agent 在分支写真实代码 + 补测试 → 提交 → 开真 PR → 写 GithubRef + **自动挂红线 pending(复用 S3)** → 任务移待验收、指派 agent-02。
+- **US-19(E3)异常回路**:执行失败 / 超时 / CI 红 → 任务回 To Do 或标 blocked + 原因;**不静默死**;超过 N 次升级人工。
+- **US-20(E5/安全)🛡 守护**:并发认领锁(防多 agent 抢同一 story);agent 执行凭证**最小权限、无 merge/approval 通道**(延续 US-16 安全模型)。
+
+> S4 完成 = MVP 核心闭环用真 agent 跑通;紧接 S5(Evidence + 成本/Token 观测)闭合 MVP。外部验证 probe 贯穿 S4–S5,别等 v1。
