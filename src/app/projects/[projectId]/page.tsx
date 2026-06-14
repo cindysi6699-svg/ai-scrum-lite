@@ -104,8 +104,8 @@ type BacklogItem = {
 type BacklogStoryRow = {
   code: string;
   title: string;
-  status: "执行中" | "待验收" | "返工中" | "To Do";
-  points: number;
+  status: "执行中" | "待验收" | "返工中" | "To Do" | "已完成" | "就绪" | "待办" | "归档";
+  meta: string;
 };
 
 type BacklogEpicRow = {
@@ -469,6 +469,10 @@ function storyStatusClassName(status: BacklogStoryRow["status"]) {
     return "flex items-center gap-1 text-[11px] text-[#be123c]";
   }
 
+  if (status === "已完成") {
+    return "flex items-center gap-1 text-[11px] text-[#047857]";
+  }
+
   return "text-[11px] text-[#a1a1aa]";
 }
 
@@ -483,6 +487,10 @@ function storyStatusDotClassName(status: BacklogStoryRow["status"]) {
 
   if (status === "返工中") {
     return "bg-rose-500";
+  }
+
+  if (status === "已完成") {
+    return "bg-emerald-500";
   }
 
   return "";
@@ -500,125 +508,83 @@ function priorityTone(priority: BacklogEpicRow["priority"]) {
   return "bg-zinc-100 text-[#71717a]";
 }
 
-function buildBacklogRows(epics: BacklogItem[], stories: BacklogItem[]) {
-  const epicByCode = new Map(epics.map((epic) => [backlogCode(epic.title), epic]));
-  const storyByCode = new Map(stories.map((story) => [backlogCode(story.title), story]));
-  const storyTitle = (code: string, fallback: string) => {
-    const story = storyByCode.get(code);
-
-    return story ? cleanBacklogTitle(story.title) : fallback;
+function buildBacklogRows(epics: BacklogItem[], stories: BacklogItem[]): BacklogEpicRow[] {
+  const mapPriority = (p: string): BacklogEpicRow["priority"] =>
+    p === "P0" || p === "P1" ? "Must" : p === "P2" ? "Should" : "Could";
+  const mapStatus = (s: string): BacklogStoryRow["status"] =>
+    s === "done"
+      ? "已完成"
+      : s === "in_sprint"
+        ? "执行中"
+        : s === "ready"
+          ? "就绪"
+          : s === "archived"
+            ? "归档"
+            : "待办";
+  const deliveryLabel = (s: string) =>
+    s === "done"
+      ? "已交付"
+      : s === "in_sprint"
+        ? "进行中"
+        : s === "ready"
+          ? "就绪"
+          : s === "archived"
+            ? "归档"
+            : "规划中";
+  const widthClass = (r: number) =>
+    r <= 0 ? "w-0" : r <= 0.25 ? "w-1/4" : r <= 0.5 ? "w-1/2" : r <= 0.75 ? "w-3/4" : r < 1 ? "w-4/5" : "w-full";
+  const codeNum = (code: string) => {
+    const m = code.match(/\d+/);
+    return m ? Number(m[0]) : 999;
   };
-  const epicTitle = (code: string, fallback: string) => {
-    const epic = epicByCode.get(code);
+  const toStory = (s: BacklogItem): BacklogStoryRow => ({
+    code: backlogCode(s.title) || `#${s.id.slice(0, 4)}`,
+    title: cleanBacklogTitle(s.title),
+    status: mapStatus(s.status),
+    meta: s.priority,
+  });
 
-    return epic ? cleanBacklogTitle(epic.title) : fallback;
-  };
+  const rows: BacklogEpicRow[] = epics
+    .slice()
+    .sort((a, b) => codeNum(backlogCode(a.title)) - codeNum(backlogCode(b.title)))
+    .map((epic) => {
+      const code = backlogCode(epic.title) || "E?";
+      const children = stories.filter((s) => s.parentId === epic.id).map(toStory);
+      const done = children.filter((s) => s.status === "已完成").length;
+      const ratio = children.length ? done / children.length : 0;
+      const badges: BacklogEpicRow["badges"] =
+        code === "E5" ? ["红线"] : code === "E6" ? ["第 1 痛点"] : undefined;
 
-  return [
-    {
-      code: "E1",
-      title: epicTitle("E1", "核心 Scrum 看板"),
-      priority: "Must",
-      sprintLabel: "S1",
-      progressLabel: "2/4 done",
-      progressWidth: "w-1/2",
-      defaultOpen: true,
-      stories: [
-        {
-          code: "US-1",
-          title: storyTitle("US-1", "看板与 Story 基础数据模型"),
-          status: "执行中",
-          points: 3,
-        },
-        {
-          code: "US-6",
-          title: storyTitle("US-6", "看板列拖拽流转 + 状态留痕"),
-          status: "To Do",
-          points: 2,
-        },
-      ],
-    },
-    {
-      code: "E2",
-      title: epicTitle("E2", "Agent 作为一等成员"),
-      priority: "Must",
-      sprintLabel: "S1 · 核心差异化",
-      stories: [
-        {
-          code: "US-2",
-          title: storyTitle("US-2", "把 Story 指派给 Agent(含离线防呆)"),
-          status: "待验收",
-          points: 3,
-        },
-      ],
-    },
-    {
-      code: "E3",
-      title: epicTitle("E3", "Agent 执行流水线"),
-      priority: "Must",
-      sprintLabel: "S1-S2",
-      stories: [
-        {
-          code: "US-3",
-          title: storyTitle("US-3", "领取->分支->写码->测->提 PR"),
-          status: "执行中",
-          points: 5,
-        },
-        {
-          code: "US-7",
-          title: storyTitle("US-7", "认领锁:防多 agent 抢同一 story"),
-          status: "返工中",
-          points: 3,
-        },
-      ],
-    },
-    {
-      code: "E4",
-      title: epicTitle("E4", "状态自动回填"),
-      priority: "Must",
-      sprintLabel: "S2",
-      stories: [
-        {
-          code: "US-5",
-          title: storyTitle("US-5", "agent 活动事件 -> 看板列流转"),
-          status: "To Do",
-          points: 3,
-        },
-      ],
-    },
-    {
-      code: "E5",
-      title: epicTitle("E5", "人类审批闸门"),
-      priority: "Must",
-      sprintLabel: "S1-S2",
-      badges: ["红线"],
-      stories: [
-        {
-          code: "US-4",
-          title: storyTitle("US-4", "验收队列 + 通过/打回 + push 硬门禁"),
-          status: "待验收",
-          points: 5,
-        },
-      ],
-    },
-    {
-      code: "E6",
-      title: epicTitle("E6", "多 Agent 可观测面板"),
-      priority: "Should",
-      sprintLabel: "S3",
-      badges: ["第 1 痛点"],
-      stories: [],
-      emptyText: "\"10 个 agent 谁在做什么、卡在哪\" - 待拆 story",
-    },
-    {
-      code: "E7",
-      title: epicTitle("E7", "反馈返工闭环增强"),
+      return {
+        code,
+        title: cleanBacklogTitle(epic.title),
+        priority: mapPriority(epic.priority),
+        sprintLabel: deliveryLabel(epic.status),
+        progressLabel: children.length ? `${done}/${children.length} done` : undefined,
+        progressWidth: children.length ? widthClass(ratio) : undefined,
+        badges,
+        stories: children,
+        emptyText: "暂无 story",
+        defaultOpen: ratio > 0 && ratio < 1,
+      };
+    });
+
+  const epicIds = new Set(epics.map((e) => e.id));
+  const orphans = stories
+    .filter((s) => !s.parentId || !epicIds.has(s.parentId))
+    .map(toStory);
+  if (orphans.length > 0) {
+    rows.push({
+      code: "—",
+      title: "未归类 Story",
       priority: "Could",
-      sprintLabel: "S3+",
-      stories: [],
-      emptyText: "打回原因结构化 · agent 带反馈精准重做 - 待拆 story",
-    },
-  ] satisfies BacklogEpicRow[];
+      sprintLabel: "",
+      stories: orphans,
+      emptyText: "",
+    });
+  }
+
+  return rows;
 }
 
 export default async function ProjectWorkspacePage({
@@ -1068,13 +1034,13 @@ function BacklogView({
                       </span>
                       <span className="flex-1 text-[#3f3f46]">{story.title}</span>
                       <span className={storyStatusClassName(story.status)}>
-                        {story.status !== "To Do" ? (
+                        {storyStatusDotClassName(story.status) ? (
                           <span className={`h-1.5 w-1.5 rounded-full ${storyStatusDotClassName(story.status)}`} />
                         ) : null}
                         {story.status}
                       </span>
                       <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-[#71717a]">
-                        {story.points}
+                        {story.meta}
                       </span>
                     </Link>
                     ))}

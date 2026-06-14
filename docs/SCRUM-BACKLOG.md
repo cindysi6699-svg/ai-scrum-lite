@@ -163,7 +163,7 @@ Scenario: agent 进度驱动看板
 | **S1 Walking Skeleton** | US-1..5 单 agent 闭环 | ✅ 已交付 |
 | **S2 掌舵看得清** | US-8..12(导入/详情抽屉/多agent可观测/生命周期/拖拽) | ✅ 已交付 |
 | **S3 红线走骨架** | US-13..16 人审红线服务端+GitHub 强制 | ✅ 已交付 |
-| **S4 真 agent 自动执行** | E3 真执行:领活→workspace→写真码→真 PR→回填(接 S3 红线) | ⬅ **下一步,make-or-break** |
+| **S4 双 agent 端到端闭环** | E3:dev(Codex)自动开发提 PR + qa(Claude)自动验收判定 + 人审红线 + 人合并(走骨架·一个 task) | ⬅ **下一步,make-or-break** |
 | **S5 Evidence + 成本/Token 观测** | E8 + E9;**MVP 在此闭合** | 最强差异化 |
 | 🔬 **外部验证 probe(贯穿 S4–S5)** | 3+ 外部 Lead 看 demo/访谈 | 验证 gate 建造,不等 v1 |
 | **S6 CI 证据门 + QA 升级** | E10;CI 绿 + QA pass + 人审 三门齐 | 补"只强制人审"的缺口 |
@@ -239,13 +239,16 @@ Scenario: 导入校验失败
 
 ---
 
-## 9. 下一步:S4 — 真 agent 自动执行(候选 story,riskiest-first)
+## 9. 下一步:S4 — 双 agent 端到端闭环(走骨架)
 
-> 目标:让**真 agent(非 `agent-pr.mjs` 模拟器)**端到端闭环——证明 MVP 核心承诺真能跑。接上 S3 已建的红线挂锁。详细 Cohn+Gherkin 待 S4 Planning 展开;运行时选型(轻量自管编排 vs Managed Agents)开 S4 时拍板(见 PRD §10)。
+> 目标:**一个 task 走完整条交付线、两个真 agent 都自动跑**(非 `agent-pr.mjs` 模拟器):dev(Codex)自动开发提 PR → qa(Claude)自动验收判定 → 人二次验收(翻 success)→ 人合并(agent-sandbox)。走骨架:一个 task、不并发。完整 Gherkin 见 `docs/sprints/sprint-4/sprint-spec.json`;技术方案(执行器选型/QA 自动判定/触发与隔离/凭证)见 `docs/sprints/sprint-4/S4-discussion-brief.md`,待新 session 拍板。
+>
+> **🚨 红线**:agent 永不自己 merge、永不翻 `success`;QA 判"过"只移到 Done 列(待人审)+ 保持 GitHub `pending`,人二次验收才翻 success+合并。
 
-- **US-17(E3)Agent 领活 + workspace**:真 agent 监听分配给它的 todo 任务 → 拿到隔离 workspace/worktree + 任务上下文 → 开分支,回写看板(in_progress + 活动流)。
-- **US-18(E3)Agent 写码 + 开真 PR**:agent 在分支写真实代码 + 补测试 → 提交 → 开真 PR → 写 GithubRef + **自动挂红线 pending(复用 S3)** → 任务移待验收、指派 agent-02。
-- **US-19(E3)异常回路**:执行失败 / 超时 / CI 红 → 任务回 To Do 或标 blocked + 原因;**不静默死**;超过 N 次升级人工。
-- **US-20(E5/安全)🛡 守护**:并发认领锁(防多 agent 抢同一 story);agent 执行凭证**最小权限、无 merge/approval 通道**(延续 US-16 安全模型)。
+- **US-17(E3 · P0)Dev agent 领活 + 隔离 workspace**:worker 认领锁领『指派给 dev agent、todo』任务 → git worktree + 注入上下文 → in-place 转 in_progress。
+- **US-18(E3 · P0)Dev agent 写真码 + 自测 + 开真 PR**:执行器在 worktree 写码+自跑 lint/tsc/build,**不过不开 PR**;过则开真 PR + 挂红线 pending → 待验收、指派 agent-02。
+- **US-19(E3 · P0)QA agent 自动验收闭环**:qa agent 领待验收任务 → worktree 拉 PR 分支 → 自动写/跑覆盖 AC 的 e2e + 重跑门 → 全绿=过(到 Done 列待人审,**不翻 success**)/ 否则打回 dev + 证据。
+- **US-20(E3 · P1)返工闭环 + 异常回路**:打回 → dev agent 带反馈自动返工;返工/失败**有界**(超 N 次 blocked 升级);失败/超时可见回退、不无限。
+- **US-21(E3/安全 · P0)双 agent 安全守护**:dev 凭证只 push/PR/挂 pending;qa 凭证只读 PR/跑测试/改看板,**不写 GitHub status、不 merge**;翻 success/merge 仍只人类;两 agent 隔离主工作区/生产(延续 US-16)。
 
-> S4 完成 = MVP 核心闭环用真 agent 跑通;紧接 S5(Evidence + 成本/Token 观测)闭合 MVP。外部验证 probe 贯穿 S4–S5,别等 v1。
+> S4 完成 = MVP 核心闭环用**真双 agent** 跑通;紧接 S5(Evidence + 成本/Token 观测)闭合 MVP。外部验证 probe 贯穿 S4–S5,别等 v1。

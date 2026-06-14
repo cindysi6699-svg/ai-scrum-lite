@@ -1,0 +1,85 @@
+{
+  "sprint": {
+    "name": "Sprint 4 - 双 agent 端到端闭环(走骨架)",
+    "goal": "一个 task 从派发走完整条交付线:真 dev agent(Codex)自动领活→开发→提 PR(挂 S3 红线) → 真 QA agent(Claude)自动领取待验收→跑验收→判定(全绿→待人审 / 否则打回 dev 返工) → 人二次验收(翻 success)→ 人合并集成(agent-sandbox)。两个 agent 都自动跑,人类只在三闸门;agent 永不自己 merge、永不翻 success。走骨架:一个 task、不并发、不规模化。",
+    "startDate": "2026-07-02",
+    "endDate": "2026-07-09"
+  },
+  "epics": [
+    { "code": "E3", "title": "Agent 执行流水线(dev 开发 + qa 验收 双闭环)", "value": "核心差异化 / MVP make-or-break", "priority": "P0", "targetSprint": "S4" }
+  ],
+  "stories": [
+    {
+      "code": "US-17",
+      "epic": "E3",
+      "title": "Dev agent 领活 + 隔离 workspace",
+      "priority": "P0",
+      "userStory": "作为 真 dev agent(agent-01/Codex), 我想要 自动领取指派给我的 todo 任务并拿到隔离工作区, 以便于 独立干活、不互相污染",
+      "acceptanceCriteria": "Given 一个任务在 todo 且指派给真 dev agent(agent-01)\nWhen 编排器 worker 轮询/被触发\nThen 用认领锁领取(并发只领一次,幂等)\nAnd 创建隔离 git worktree(base=agent-sandbox)+ 注入上下文(story/AC/repo/边界)\nAnd 任务 in-place 转 in_progress + 活动流留痕(actor=agent-01)\nAnd worker 不接触主工作区 / .env.local / 生产库",
+      "tasks": [
+        "[INFRA] 编排器 worker:找『指派给 dev agent 且 todo』的任务;认领锁防并发重复领",
+        "[INFRA] 隔离 git worktree(base=agent-sandbox)+ 注入上下文",
+        "[BE] 领取 → in-place 转 in_progress + TaskUpdate(actor=agent-01)",
+        "[TEST] 🛡 并发/重复触发只领一次(认领锁幂等)"
+      ]
+    },
+    {
+      "code": "US-18",
+      "epic": "E3",
+      "title": "Dev agent 写真码 + 自测 + 开真 PR(挂红线)",
+      "priority": "P0",
+      "userStory": "作为 dev agent, 我想要 在工作区真写代码、补测试、自测、开 PR, 以便于 产出进入待验收闭环",
+      "acceptanceCriteria": "Given 一个已领取、有 workspace + 上下文的任务\nWhen 执行器(默认 Codex CLI,适配层可换)按上下文工作\nThen 写代码 + 补测试 + 自跑 lint/tsc/build\nAnd **自测不过 = 不开 PR、不进待验收**(质量前置)\nAnd 自测全过 → commit → 开真 PR(base=agent-sandbox)→ 写 GithubRef + 挂 helmsman/human-approval=pending(复用 S3)\nAnd 任务 in-place 转『待验收』+ **指派 agent-02(QA)** + 留痕(PR/摘要/跑过的门)",
+      "tasks": [
+        "[INFRA] dev 执行器适配层:worktree 内调用编码 agent CLI(默认 Codex CLI;接口抽象可换)",
+        "[INFRA] 写码 + 自跑 lint/tsc/build + commit;门不过则中止、不开 PR",
+        "[BE] 开真 PR(base=agent-sandbox)+ 写 GithubRef + 挂红线 pending(复用 S3)",
+        "[BE] in-place 转待验收 + 指派 agent-02 + TaskUpdate",
+        "[TEST] 🛡 自测红 → 不开 PR、不进待验收、有可见失败记录"
+      ]
+    },
+    {
+      "code": "US-19",
+      "epic": "E3",
+      "title": "QA agent 自动验收闭环(领取→跑验收→判定)",
+      "priority": "P0",
+      "userStory": "作为 真 QA agent(agent-02/Claude), 我想要 自动领取待验收任务、跑验收并判定通过或打回, 以便于 把质量门也自动化、人类只做最终二次验收",
+      "acceptanceCriteria": "Given 一个任务进入『待验收』且指派给真 QA agent(agent-02),带关联 PR\nWhen QA agent worker 领取(认领锁)\nThen 在隔离 workspace 拉该 PR 分支,自动写/跑覆盖该 story 每条验收标准的 e2e + 重跑 lint/tsc/build\nAnd 全部绿 = 通过 → 任务 in-place 流转到 Done 列(待人二次验收)+ 留痕(覆盖了哪些 AC、结果)\nAnd 任一挂 / 某条 AC 未覆盖 = 打回 → 任务回 in_progress、指派回 dev agent + 写明哪条没过 + 证据\nAnd **QA agent 只改看板状态,绝不翻 GitHub success、绝不 merge**——GitHub 红线保持 pending,等人二次验收才翻 success",
+      "tasks": [
+        "[INFRA] QA 执行器:领『指派给 qa agent 且待验收』任务(认领锁)→ worktree 拉 PR 分支",
+        "[INFRA] 自动写/跑覆盖 AC 的 e2e + 重跑 lint/tsc/build,产出判定(全绿=过 / 否则打回)",
+        "[BE] 通过 → in-place 到 Done 列(待人审)+ 留痕(AC 覆盖/结果);**不翻 GitHub success**",
+        "[BE] 打回 → in-place 回 in_progress + 指派回 dev agent + 写哪条 AC 没过 + 证据",
+        "[TEST] 🛡 QA agent 路径尝试翻 success / merge → 无通道(红线只人类能解)"
+      ]
+    },
+    {
+      "code": "US-20",
+      "epic": "E3",
+      "title": "返工闭环 + 异常回路(有界,不静默/不无限)",
+      "priority": "P1",
+      "userStory": "作为 Lead, 我想要 打回能触发 dev agent 自动返工、且失败/超时可见回退, 以便于 闭环能自愈但不会失控空转",
+      "acceptanceCriteria": "Given QA agent 打回 或 执行失败/超时\nWhen 系统处理\nThen 打回 → dev agent 带反馈自动返工(回 US-18 循环)\nAnd 返工/失败有计数;打回或失败超过 N 次 → 标 blocked 升级人工,**不无限循环**\nAnd 任一 agent 执行失败/超时(>N 分钟)→ 任务 in-place 可见回退 + 原因写活动流;worktree 按策略保留/清理(可复查)",
+      "tasks": [
+        "[BE] 打回 → dev agent 带反馈自动返工(衔接 US-18);返工/失败计数 + 阈值 → 超限 blocked 升级",
+        "[BE] 失败/超时 → in-place 回退 + 原因写 TaskUpdate;不无限重试",
+        "[INFRA] worktree 失败保留/清理策略(可复查、不污染主工作区)",
+        "[TEST] 🛡 注入必失败任务 → 可见回退、写原因、打回有界、不空转"
+      ]
+    },
+    {
+      "code": "US-21",
+      "epic": "E3",
+      "title": "双 agent 执行安全守护(延续 S3 红线)",
+      "priority": "P0",
+      "userStory": "作为 Lead, 我想要 dev 和 qa 两个 agent 的凭证都最小权限、且都没有合并/自批通道, 以便于 红线不被任何 agent 绕过",
+      "acceptanceCriteria": "Given dev/qa 两个 agent 的执行凭证与代码路径\nThen dev agent 只能:推分支 / 开 PR / 挂 pending(Contents + PR + Commit statuses 仅 pending)\nAnd QA agent 只能:读 PR / 跑测试 / 改看板状态——**不写 GitHub status、不 merge**\nAnd 翻 helmsman/human-approval=success 仍只经人类 approve action(US-16 不变);两个 agent 都无此通道、无 merge 通道\nAnd 两个 agent 都在隔离 worktree 跑,不接触主工作区 / .env.local / 生产库\nAnd e2e/脚本断言:任一 agent 路径尝试 merge 或翻 success → 失败/无通道",
+      "tasks": [
+        "[SECURITY] dev 凭证最小权限(Contents/PR/Commit-status-pending);qa 凭证不含 GitHub 写 status / merge",
+        "[SECURITY] 翻 success / merge 的函数只在人类 approve action;两 agent 代码路径都不引用",
+        "[SECURITY] 两 agent 仅在隔离 worktree 跑,隔离主工作区 / .env.local / 生产库",
+        "[TEST] 🛡 任一 agent 路径尝试 merge 或翻 success → 被拒/无通道;认领锁防抢占"
+      ]
+    }
+  ]
+}
