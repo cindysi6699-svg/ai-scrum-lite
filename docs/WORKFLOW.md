@@ -135,6 +135,26 @@
 
 ---
 
+## 🌿 Git 分支与发布策略
+
+**main = 主干(trunk)**:始终最新、与 Sprint 进度同步;**main 同时是 Vercel 生产部署分支——push main 即自动部署生产。**
+
+**日常流程**
+- 每块工作从 **main 切短命分支**(人类 `feat/...`,agent `agent/US-xx-*`)→ 做完 → **尽快合回 main → 删分支**。**不养长命 feature 分支**(会让 main 陈旧、分支膨胀;Sprint 3 曾犯过)。
+- **人类 Lead 自己 review 过的工作**:**直接合 main**——你本人就是那道人类闸门,不必给自己走一遍 PR 审批仪式。
+- **agent 的产出**:走 **PR + 红线**——agent 提 PR 自动挂 `helmsman/human-approval=pending`,人类点「通过验收」翻 `success` 才允许合并(US-13~16,服务端 + 分支保护双强制)。
+
+**长期分支**
+- `agent-sandbox`:红线测试基线,挂着 ruleset(required check `helmsman/human-approval` + 空 bypass);**agent 的测试 PR 打这里,不碰 main**。保留复用。
+
+**部署联动(易踩)**
+- 合 main = 部署生产。若改动含 **prisma migration**,**必须先对生产库 `set -a; source .env.local; set +a; pnpm prisma migrate deploy`,再 push main**——否则部署后的新代码查不到新列会崩(加列是可空、向后兼容,可安全先迁)。
+- 生产红线要真生效,需在 **Vercel 配 `GITHUB_TOKEN`**(`GITHUB_REPOSITORY` 有默认值,可不配)。不配不崩,只是生产里翻 GitHub 状态会失败。
+
+**当前状态(2026-06-14 交接)**:`main` 已含 Sprint 1–3(代码 + 文档),生产库 migration 已应用;仅 `main` + `agent-sandbox` 两个分支。⏳ 待办:Vercel 配 `GITHUB_TOKEN`。
+
+---
+
 ## 📁 文档归档约定(固定文件夹 + 生命周期)
 
 所有产出统一放进**代码仓库的 `docs/`**(与代码同仓、随 git 版本化),结构固定:
