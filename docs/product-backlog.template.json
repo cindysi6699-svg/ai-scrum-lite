@@ -1,0 +1,31 @@
+{
+  "productBacklog": {
+    "epics": [
+      {
+        "code": "E1",
+        "title": "核心 Scrum 看板",
+        "value": "协作底座",
+        "priority": "P0",
+        "status": "done",
+        "stories": [
+          {
+            "code": "US-1",
+            "title": "看板与 Story 基础",
+            "priority": "P1",
+            "status": "done",
+            "userStory": "作为 团队 Lead, 我想要 在看板上创建 user story 并在列间流转, 以便于 有一个承载人和 agent 工作的底座",
+            "acceptanceCriteria": "Given 我在一个看板上\nWhen 我新建 story 并流转\nThen 状态更新并留痕"
+          }
+        ]
+      },
+      {
+        "code": "E8",
+        "title": "Agent Run & 成本/Token 可观测",
+        "value": "最强差异化",
+        "priority": "P0",
+        "status": "backlog",
+        "stories": []
+      }
+    ]
+  }
+}

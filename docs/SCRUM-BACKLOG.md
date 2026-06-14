@@ -32,6 +32,7 @@
 | **E9** | **Evidence registry**(diff/CI log/测试/AI review/人审 沉淀为可追溯证据) | 可信交付 | Should | ⚪ S5 |
 | **E10** | **CI 证据门 + 自动修复回路**(Actions 作 required checks、CI 失败 agent 修) | 质量门做全 | Should | ⚪ S6 |
 | **E11** | **发布治理 / 红线 2**(release readiness、flag、灰度、监控、回滚) | 生产风险控制 | **延后·优先集成外部** | ⚪ post-MVP |
+| **E12** | Backlog 导入与自助维护(产品 backlog 导入、Sprint 导入去重) | 自助便利 / table-stakes | Could | ⚪ 低优先,先用现状 |
 
 ---
 
@@ -252,3 +253,54 @@ Scenario: 导入校验失败
 - **US-21(E3/安全 · P0)双 agent 安全守护**:dev 凭证只 push/PR/挂 pending;qa 凭证只读 PR/跑测试/改看板,**不写 GitHub status、不 merge**;翻 success/merge 仍只人类;两 agent 隔离主工作区/生产(延续 US-16)。
 
 > S4 完成 = MVP 核心闭环用**真双 agent** 跑通;紧接 S5(Evidence + 成本/Token 观测)闭合 MVP。外部验证 probe 贯穿 S4–S5,别等 v1。
+
+---
+
+## 10. E12 — Backlog 导入与自助维护(低优先 · 非核心 · 先用现状)
+
+> 这一档是 table-stakes 便利功能,**不顶替 S4/S5 核心主线**;等核心闭环成形后再做。当前可继续用「单个新建 Epic」+「Sprint Spec 导入」+(必要时)我跑脚本 维护。
+
+### US-25(E12)产品 Backlog 导入(初版,纯 epic+story)
+> 背景:目前只能单个「新建 Epic」或按 Sprint 导入(带 task)。缺一个**一次性导入初版产品 backlog**(多 epic + story、不带 sprint/task)的入口,让项目起步时快速铺好骨架、且 Lead 能自助维护(不靠脚本)。模版:`docs/product-backlog.template.json`。
+
+> **As a** Lead,**I want to** 粘贴一段产品 backlog JSON 一次性导入多个 epic 和 story,**so that** 起步即铺好 backlog 骨架,不用逐个新建或逐 sprint 导入。
+
+```gherkin
+Scenario: Backlog 页导入
+  Given 我在 Backlog 页
+  When 我点「导入 Backlog」,粘贴符合 product-backlog 模版的 JSON 并提交
+  Then zod 校验通过 → 事务 upsert:epic 按 code、story 按 code 挂到 epic(parentId)
+  And 不创建 sprint / task
+  And 重复导入幂等(by code 更新,不重复建)
+
+Scenario: 校验失败整体回滚
+  Given JSON 不合法或缺字段
+  When 我提交
+  Then 弹窗内内联列出字段错误,不落任何数据
+
+Scenario: 新建项目后提示导入(onboarding,可跳过)
+  Given 我新建 project 并确认
+  When 系统提示「是否导入初版 backlog」
+  Then 我可导入(同上)或跳过
+```
+任务:
+- [ ] `[BE]` `importProductBacklogAction(spec)`:zod 校验 product-backlog 结构 → 事务 by-code upsert epic + story(挂 parentId);无 sprint/task
+- [ ] `[FE]` Backlog 页「导入 Backlog」按钮 + 导入弹窗(复用 US-8 弹层,遵循弹层规范)
+- [ ] `[FE]` 新建 project 确认后「是否导入初版 backlog」提示(可跳过)
+- [ ] `[TEST]` 🛡 非法/缺字段整体回滚 + 内联报错;重复导入幂等;story 正确挂到 epic
+### US-26(E12)Sprint 导入 epic 按 code 去重(修复"建重复")
+> 背景:`importSprintAction` 对 epic 是 `create`(不去重)→ 跨 sprint 复用同一 epic(如 E1)会建出重复 BacklogItem。
+
+> **As a** Lead,**I want** Sprint 导入时按 code 复用已有 epic 而非重复创建,**so that** backlog 里不会出现重复 epic。
+
+```gherkin
+Scenario: 跨 Sprint 复用 epic 不重复
+  Given 项目里已有 epic E1
+  When 我导入一个引用 E1 的新 Sprint Spec
+  Then 系统复用已有 E1(不新建第二条 E1),story 挂到它下面
+```
+任务:
+- [ ] `[BE]` importSprintAction:epic 按 `code`(title 前缀)查找复用,不存在才建;story 仍按原逻辑
+- [ ] `[TEST]` 🛡 重复引用同一 epic 多次导入,backlog 中该 epic 仍只 1 条
+
+> **优先级(整个 E12)**:Could / 低 —— table-stakes、非差异化,**不顶替 S4/S5**;small,可在核心闲时穿插。
